@@ -22,8 +22,7 @@ jobs:
         uses: docker/build-push-action@v2
         with:
           push: true
-          image: ${{ github.repository }}
-          tags: latest
+          tags: ${{ github.repository }}:latest
       - name: Docker Hub Description
         uses: peter-evans/dockerhub-description@v2
         with:

@@ -3,7 +3,6 @@
 
 import asyncio
 import logging
-from distutils.log import debug
 from functools import partial, wraps
 
 import websockets

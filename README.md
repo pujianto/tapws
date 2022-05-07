@@ -8,6 +8,12 @@ This project complements [V86](https://github.com/copy/v86) for its networking f
 
 ### Using Docker
 
+
+#### Pre-built Docker image
+- `docker pull pujianto/tapws`
+- `docker run --rm -p 8080:8080 --privileged -it pujianto/tapws`
+
+#### Local Build
 - Clone this repository
 - Run `docker build -t tapws .`
 - Run `docker run --rm -p 8080:8080 --privileged tapws`

@@ -23,7 +23,7 @@ jobs:
         with:
           push: true
           image: ${{ github.repository }}
-          tag: latest
+          tags: latest
       - name: Docker Hub Description
         uses: peter-evans/dockerhub-description@v2
         with:

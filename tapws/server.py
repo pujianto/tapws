@@ -16,7 +16,7 @@ def wrap_async(func):
     @wraps(func)
     async def run(*args, loop=None, executor=None, **kwargs):
         if loop is None:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
         pfunc = partial(func, *args, **kwargs)
         return await loop.run_in_executor(executor, pfunc)
 
@@ -86,5 +86,5 @@ class Server:
             loop.add_signal_handler(sig, self.cleanup, sig)
 
         self.terminate = False
-        await asyncio.gather(self.ws_server, self.device_worker())
+        await asyncio.gather(self.ws_server, self.device_worker(), return_exceptions=True)
         self.tap.close()

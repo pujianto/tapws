@@ -13,6 +13,7 @@ async def main():
     virtual_ethernet.up()
     server = Server(device=virtual_ethernet)
 
+    print('Starting server...')
     await server.start()
 
 

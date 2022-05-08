@@ -68,6 +68,7 @@ class Server:
     def cleanup(self, *args, **kwargs):
         logging.info('Attempting to stop server...')
         self.terminate = True
+        self.tap.close()
 
     async def device_worker(self):
         while not self.terminate:

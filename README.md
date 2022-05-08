@@ -29,6 +29,8 @@ Now you can ping the tapws server (10.11.12.1)
 
 ### TODO
 - Add iptables integration
+- Implement Wss 
+
 
 ### References
 

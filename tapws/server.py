@@ -68,7 +68,6 @@ class Server:
     def cleanup(self, *args, **kwargs):
         logging.info('Attempting to stop server...')
         self.terminate = True
-        self.tap.close()
 
     async def device_worker(self):
         while not self.terminate:
@@ -88,3 +87,4 @@ class Server:
 
         self.terminate = False
         await asyncio.gather(self.ws_server, self.device_worker())
+        self.tap.close()

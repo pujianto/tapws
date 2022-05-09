@@ -71,9 +71,14 @@ class Server:
         self.CLIENTS.remove(websocket)
 
     def cleanup(self, *args, **kwargs):
+
+        async def stop():
+            self.stop.set_result(True)
+
         print('Stopping server...')
         logging.info('Stopping server...')
-        self.stop.set_result(None)
+        loop = asyncio.get_running_loop()
+        loop.create_task(stop())
 
     async def device_worker(self):
         while True:

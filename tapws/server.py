@@ -8,6 +8,7 @@ from contextlib import suppress
 from functools import partial, wraps
 
 import websockets
+from pytun import Error as TunError
 
 from .device import create_tap_device
 
@@ -42,58 +43,50 @@ class Server:
         for client in self.CLIENTS:
             await client.send(message)
 
+    def tap_read(self):
+        try:
+            message = self.tap.read(self.tap.mtu + 40)
+            asyncio.create_task(self.broadcast(message))
+        except TunError as e:
+            logging.error(f'Error reading from device: {e}')
+        except Exception as e:
+            logging.error(f'Unknown error reading from device: {e}')
+
     @wrap_async
-    def async_mode(self, func, *args, **kwargs):
-        return func(*args, **kwargs)
+    def tap_write_async(self, message):
+        try:
+            self.tap.write(message)
+        except TunError as e:
+            logging.error(f'Error writing to device: {e}')
+        except Exception as e:
+            logging.error(f'Unknown error writing to device: {e}')
 
-    async def tap_read(self):
-        return await self.async_mode(self.tap.read, self.tap.mtu + 40)
-
-    async def tap_write(self, message):
-        await self.async_mode(self.tap.write, message)
-
-    async def websocket_handler(self, websocket, path):
-        self.websocket_add_client(websocket, path)
-
+    async def websocket_handler(self, websocket):
+        self.websocket_add_client(websocket)
         try:
             async for message in websocket:
-                await self.tap_write(message)
+                await self.tap_write_async(message)
 
         except websockets.exceptions.ConnectionClosed as e:
-            self.websocket_remove_client(websocket, path)
+            self.websocket_remove_client(websocket)
         except Exception as e:
             logging.error(e)
 
-    def websocket_add_client(self, websocket, path):
+    def websocket_add_client(self, websocket):
         self.CLIENTS.add(websocket)
 
-    def websocket_remove_client(self, websocket, path):
+    def websocket_remove_client(self, websocket):
         self.CLIENTS.remove(websocket)
 
-    def cleanup(self, *args, **kwargs):
+    def cleanup(self, sig):
 
         async def stop():
             if self.stop.done() is False:
                 self.stop.set_result(True)
 
-        tasks = asyncio.all_tasks()
-        for task in tasks:
-            task.cancel()
-
-        print('Stopping server... it may take a while.')
-        logging.info('Stopping server... it may take a while.')
+        logging.info(f'{sig} received, stopping server...')
         loop = asyncio.get_running_loop()
         loop.create_task(stop())
-
-    async def device_worker(self):
-        while True:
-            message = await self.tap_read()
-            logging.debug(f"Total clients: {len(self.CLIENTS)}")
-            logging.debug(f"Broadcasting message: {message}")
-            if len(self.CLIENTS):
-                await self.broadcast(message)
-            if self.stop.done():
-                break
 
     async def serve_ws(self):
         async with self.ws_server:
@@ -105,7 +98,6 @@ class Server:
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, self.cleanup, sig)
         with suppress(asyncio.CancelledError):
-            await asyncio.gather(self.serve_ws(),
-                                 self.device_worker(),
-                                 return_exceptions=True)
+            loop.add_reader(self.tap.fileno(), partial(self.tap_read))
+            await self.serve_ws()
         self.tap.close()

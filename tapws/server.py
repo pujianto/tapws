@@ -47,7 +47,7 @@ class Server:
         return func(*args, **kwargs)
 
     async def tap_read(self):
-        return await self.async_mode(self.tap.read, self.tap.mtu)
+        return await self.async_mode(self.tap.read, self.tap.mtu + 40)
 
     async def tap_write(self, message):
         await self.async_mode(self.tap.write, message)
@@ -73,10 +73,15 @@ class Server:
     def cleanup(self, *args, **kwargs):
 
         async def stop():
-            self.stop.set_result(True)
+            if self.stop.done() is False:
+                self.stop.set_result(True)
 
-        print('Stopping server...')
-        logging.info('Stopping server...')
+        tasks = asyncio.all_tasks()
+        for task in tasks:
+            task.cancel()
+
+        print('Stopping server... it may take a while.')
+        logging.info('Stopping server... it may take a while.')
         loop = asyncio.get_running_loop()
         loop.create_task(stop())
 

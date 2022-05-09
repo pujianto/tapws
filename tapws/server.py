@@ -4,7 +4,6 @@
 import asyncio
 import logging
 import signal
-from contextlib import suppress
 from functools import partial, wraps
 
 import websockets
@@ -27,7 +26,7 @@ def wrap_async(func):
 
 class Server:
 
-    def __init__(self, host='0.0.0.0', port=8080, device=None):
+    def __init__(self, host='0.0.0.0', port=8080, device=None, ssl=None):
         self.host = host
         self.port = port
         self.CLIENTS = set()
@@ -35,8 +34,10 @@ class Server:
             device = create_tap_device()
             device.up()
         self.tap = device
-        self.ws_server = websockets.serve(self.websocket_handler, self.host,
-                                          self.port)
+        self.ws_server = websockets.serve(self.websocket_handler,
+                                          self.host,
+                                          self.port,
+                                          ssl=ssl)
         self.waiter = asyncio.Future()
 
     async def broadcast(self, message):
@@ -88,6 +89,7 @@ class Server:
             loop.add_signal_handler(sig, self.cleanup, sig)
 
         loop.add_reader(self.tap.fileno(), partial(self.tap_read))
+
         async with self.ws_server:
             await self.waiter
         self.tap.close()

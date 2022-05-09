@@ -37,7 +37,7 @@ class Server:
         self.tap = device
         self.ws_server = websockets.serve(self.websocket_handler, self.host,
                                           self.port)
-        self.stop = asyncio.Future()
+        self.waiter = asyncio.Future()
 
     async def broadcast(self, message):
         for client in self.CLIENTS:
@@ -79,25 +79,18 @@ class Server:
         self.CLIENTS.remove(websocket)
 
     def cleanup(self, sig):
-
-        async def stop():
-            if self.stop.done() is False:
-                self.stop.set_result(True)
-
-        logging.info(f'{sig} received, stopping server...')
-        loop = asyncio.get_running_loop()
-        loop.create_task(stop())
-
-    async def serve_ws(self):
-        async with self.ws_server:
-            await self.stop
+        asyncio.create_task(self.stop())
 
     async def start(self):
         logging.info('Starting server...')
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, self.cleanup, sig)
-        with suppress(asyncio.CancelledError):
-            loop.add_reader(self.tap.fileno(), partial(self.tap_read))
-            await self.serve_ws()
+
+        loop.add_reader(self.tap.fileno(), partial(self.tap_read))
+        async with self.ws_server:
+            await self.waiter
         self.tap.close()
+
+    async def stop(self):
+        self.waiter.set_result(None)

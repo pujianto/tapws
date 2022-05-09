@@ -45,7 +45,7 @@ class Server:
 
     def tap_read(self):
         try:
-            message = self.tap.read(self.tap.mtu + 40)
+            message = self.tap.read(1024 * 4)
             asyncio.create_task(self.broadcast(message))
         except TunError as e:
             logging.error(f'Error reading from device: {e}')

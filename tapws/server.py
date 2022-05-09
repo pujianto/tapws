@@ -4,6 +4,7 @@
 import asyncio
 import logging
 import signal
+from contextlib import suppress
 from functools import partial, wraps
 
 import websockets
@@ -35,18 +36,21 @@ class Server:
         self.tap = device
         self.ws_server = websockets.serve(self.websocket_handler, self.host,
                                           self.port)
+        self.stop = asyncio.Future()
 
     async def broadcast(self, message):
         for client in self.CLIENTS:
             await client.send(message)
 
     @wrap_async
-    def tap_read(self):
-        return self.tap.read(self.tap.mtu)
+    def async_mode(self, func, *args, **kwargs):
+        return func(*args, **kwargs)
 
-    @wrap_async
-    def tap_write(self, message):
-        self.tap.write(message)
+    async def tap_read(self):
+        return await self.async_mode(self.tap.read, self.tap.mtu)
+
+    async def tap_write(self, message):
+        await self.async_mode(self.tap.write, message)
 
     async def websocket_handler(self, websocket, path):
         self.websocket_add_client(websocket, path)
@@ -54,6 +58,7 @@ class Server:
         try:
             async for message in websocket:
                 await self.tap_write(message)
+
         except websockets.exceptions.ConnectionClosed as e:
             self.websocket_remove_client(websocket, path)
         except Exception as e:
@@ -66,25 +71,31 @@ class Server:
         self.CLIENTS.remove(websocket)
 
     def cleanup(self, *args, **kwargs):
-        logging.info('Attempting to stop server...')
-        self.terminate = True
+        print('Stopping server...')
+        logging.info('Stopping server...')
+        self.stop.set_result(None)
 
     async def device_worker(self):
-        while not self.terminate:
+        while True:
             message = await self.tap_read()
             logging.debug(f"Total clients: {len(self.CLIENTS)}")
             logging.debug(f"Broadcasting message: {message}")
             if len(self.CLIENTS):
                 await self.broadcast(message)
-            if self.terminate:
+            if self.stop.done():
                 break
+
+    async def serve_ws(self):
+        async with self.ws_server:
+            await self.stop
 
     async def start(self):
         logging.info('Starting server...')
         loop = asyncio.get_running_loop()
         for sig in (signal.SIGINT, signal.SIGTERM):
             loop.add_signal_handler(sig, self.cleanup, sig)
-
-        self.terminate = False
-        await asyncio.gather(self.ws_server, self.device_worker(), return_exceptions=True)
+        with suppress(asyncio.CancelledError):
+            await asyncio.gather(self.serve_ws(),
+                                 self.device_worker(),
+                                 return_exceptions=True)
         self.tap.close()

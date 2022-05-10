@@ -10,7 +10,7 @@ import websockets
 from pytun import Error as TunError
 
 from .device import create_tap_device
-from .utils import wrap_async
+from .utils import async_iter, wrap_async
 
 
 class Server:
@@ -30,7 +30,7 @@ class Server:
         self.waiter = asyncio.Future()
 
     async def broadcast(self, message):
-        for client in self.CLIENTS:
+        async for client in async_iter(self.CLIENTS):
             try:
                 await client.send(message)
             except websockets.exceptions.ConnectionClosed:

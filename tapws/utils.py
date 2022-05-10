@@ -12,3 +12,8 @@ def wrap_async(func):
         return await loop.run_in_executor(executor, pfunc)
 
     return run
+
+
+async def async_iter(iterable):
+    for item in iterable:
+        yield item

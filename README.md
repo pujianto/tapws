@@ -60,8 +60,6 @@ Now you should able to ssh to the "client" side from public side (laptop) using 
 
 **Note:** If you want to test `wss://` protocol in local, consider to use [mkcert](https://github.com/FiloSottile/mkcert) instead of standard self-signed certificate.
 
-Now you can ping the tapws server (10.11.12.1)
-
 ### TODO
 
 - Add iptables integration

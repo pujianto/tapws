@@ -10,7 +10,17 @@ import websockets
 from pytun import Error as TunError
 
 from .device import create_tap_device
-from .utils import async_iter, wrap_async
+from .utils import async_iter, format_mac, wrap_async
+
+
+class Connection:
+
+    def __init__(self, websocket, mac=None):
+        self.mac = mac
+        self.websocket = websocket
+
+    def __repr__(self):
+        return f'Connection({self.websocket.id})'
 
 
 class Server:
@@ -18,11 +28,15 @@ class Server:
     def __init__(self, host='0.0.0.0', port=8080, device=None, ssl=None):
         self.host = host
         self.port = port
-        self.CLIENTS = set()
+        self.connections = set()
         if device is None:
             device = create_tap_device()
             device.up()
         self.tap = device
+        self.hwaddr = format_mac(self.tap.hwaddr)
+        # refs: https://www.iana.org/assignments/ieee-802-numbers/ieee-802-numbers.xhtml
+        self.broadcast_addr = 'ff:ff:ff:ff:ff:ff'
+        self.whitelist_macs = ('33:33:', '01:00:5e:', '00:52:02:')
         self.ws_server = websockets.serve(self.websocket_handler,
                                           self.host,
                                           self.port,
@@ -30,9 +44,20 @@ class Server:
         self.waiter = asyncio.Future()
 
     async def broadcast(self, message):
-        async for client in async_iter(self.CLIENTS):
+        dst_mac = format_mac(message[:6])
+        async for connection in async_iter(self.connections):
             try:
-                await client.send(message)
+
+                logging.debug(
+                    f'Sending to {dst_mac} | connection: {connection.mac} | hwaddr: {self.hwaddr}'
+                )
+
+                if dst_mac in [self.broadcast_addr, connection.mac]:
+                    await connection.websocket.send(message)
+                    continue
+
+                if dst_mac.startswith(self.whitelist_macs):
+                    await connection.websocket.send(message)
             except websockets.exceptions.ConnectionClosed:
                 logging.debug('client disconnected')
             except Exception as e:
@@ -57,9 +82,15 @@ class Server:
             logging.error(f'Unknown error writing to device: {e}')
 
     async def websocket_handler(self, websocket):
-        self.websocket_add_client(websocket)
+        connection = Connection(websocket, None)
+        self.add_connection(connection)
         try:
             async for message in websocket:
+                mac = format_mac(message[6:12])
+                logging.debug(
+                    f'incoming from {mac} | connection: {connection.mac} | hwaddr: {self.hwaddr}'
+                )
+                connection.mac = mac
                 await self.tap_write_async(message)
 
         except websockets.exceptions.ConnectionClosed as e:
@@ -67,13 +98,13 @@ class Server:
         except Exception as e:
             logging.error(e)
         finally:
-            self.websocket_remove_client(websocket)
+            self.remove_connection(connection)
 
-    def websocket_add_client(self, websocket):
-        self.CLIENTS.add(websocket)
+    def add_connection(self, connection):
+        self.connections.add(connection)
 
-    def websocket_remove_client(self, websocket):
-        self.CLIENTS.remove(websocket)
+    def remove_connection(self, connection):
+        self.connections.remove(connection)
 
     def cleanup(self, sig):
         asyncio.create_task(self.stop())

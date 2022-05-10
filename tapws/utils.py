@@ -17,3 +17,7 @@ def wrap_async(func):
 async def async_iter(iterable):
     for item in iterable:
         yield item
+
+
+def format_mac(data):
+    return ':'.join('{0:02x}'.format(a) for a in data)

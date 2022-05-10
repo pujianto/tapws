@@ -31,7 +31,12 @@ class Server:
 
     async def broadcast(self, message):
         for client in self.CLIENTS:
-            await client.send(message)
+            try:
+                await client.send(message)
+            except websockets.exceptions.ConnectionClosed:
+                logging.debug('client disconnected')
+            except Exception as e:
+                logging.error(f'Error broadcasting message to client: {e}')
 
     def tap_read(self):
         try:
@@ -58,9 +63,11 @@ class Server:
                 await self.tap_write_async(message)
 
         except websockets.exceptions.ConnectionClosed as e:
-            self.websocket_remove_client(websocket)
+            logging.debug(f'Client disconnected: {e}')
         except Exception as e:
             logging.error(e)
+        finally:
+            self.websocket_remove_client(websocket)
 
     def websocket_add_client(self, websocket):
         self.CLIENTS.add(websocket)

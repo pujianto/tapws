@@ -123,3 +123,15 @@ class Server:
 
     async def stop(self):
         self.waiter.set_result(None)
+
+
+class DhcpServerProtocol(asyncio.DatagramProtocol):
+
+    def __init__(self):
+        pass
+
+    def connection_made(self, transport) -> None:
+        return super().connection_made(transport)
+
+    def datagram_received(self, data, addr):
+        return super().datagram_received(data, addr)

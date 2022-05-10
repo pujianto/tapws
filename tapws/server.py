@@ -4,24 +4,13 @@
 import asyncio
 import logging
 import signal
-from functools import partial, wraps
+from functools import partial
 
 import websockets
 from pytun import Error as TunError
 
 from .device import create_tap_device
-
-
-def wrap_async(func):
-
-    @wraps(func)
-    async def run(*args, loop=None, executor=None, **kwargs):
-        if loop is None:
-            loop = asyncio.get_running_loop()
-        pfunc = partial(func, *args, **kwargs)
-        return await loop.run_in_executor(executor, pfunc)
-
-    return run
+from .utils import wrap_async
 
 
 class Server:

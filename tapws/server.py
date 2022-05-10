@@ -33,8 +33,8 @@ class Server:
             device = create_tap_device()
             device.up()
         self.tap = device
-        self.hwaddr = format_mac(self.tap.hwaddr)
-        # refs: https://www.iana.org/assignments/ieee-802-numbers/ieee-802-numbers.xhtml
+        self.hw_addr = format_mac(self.tap.hwaddr)
+        # refs: https://www.iana.org/assignments/ethernet-numbers/ethernet-numbers.xhtml
         self.broadcast_addr = 'ff:ff:ff:ff:ff:ff'
         self.whitelist_macs = ('33:33:', '01:00:5e:', '00:52:02:')
         self.ws_server = websockets.serve(self.websocket_handler,
@@ -49,7 +49,7 @@ class Server:
             try:
 
                 logging.debug(
-                    f'Sending to {dst_mac} | connection: {connection.mac} | hwaddr: {self.hwaddr}'
+                    f'Sending to {dst_mac} | connection: {connection.mac} | hwaddr: {self.hw_addr}'
                 )
 
                 if dst_mac in [self.broadcast_addr, connection.mac]:
@@ -88,7 +88,7 @@ class Server:
             async for message in websocket:
                 mac = format_mac(message[6:12])
                 logging.debug(
-                    f'incoming from {mac} | connection: {connection.mac} | hwaddr: {self.hwaddr}'
+                    f'incoming from {mac} | connection: {connection.mac} | hwaddr: {self.hw_addr}'
                 )
                 connection.mac = mac
                 await self.tap_write_async(message)

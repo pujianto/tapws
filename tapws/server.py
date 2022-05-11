@@ -2,11 +2,13 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
+import ipaddress
 import logging
 import signal
 from functools import partial
 
 import websockets
+from dhcppython.packet import DHCPPacket
 from pytun import Error as TunError
 
 from .device import create_tap_device
@@ -126,12 +128,35 @@ class Server:
 
 
 class DhcpServerProtocol(asyncio.DatagramProtocol):
+    """_summary_
+    Support for DHCPv4
+    Args:
+        asyncio (_type_): _description_
+    """
 
-    def __init__(self):
+    def __init__(self, max_lease_duration=86400, server=None):
+        self.allocated_ips_table = set()
+        self.dhcp_cookie = '99.130.83.99'
         pass
 
-    def connection_made(self, transport) -> None:
+    def connection_made(self, transport):
         return super().connection_made(transport)
 
     def datagram_received(self, data, addr):
-        return super().datagram_received(data, addr)
+        packet = DHCPPacket.from_bytes(data)
+        
+
+    def build_dhcp_packet(self):
+        pass
+
+    def send_dhcp_offer(self):
+        pass
+
+    def send_dhcp_ack(self):
+        pass
+
+    def dhcp_release(self):
+        pass
+
+    def schedule_release(self):
+        pass

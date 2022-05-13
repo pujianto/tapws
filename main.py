@@ -1,18 +1,18 @@
 import asyncio
 import logging
 import os
+import signal
 import ssl
 import sys
 
 import uvloop
 
-from tapws import Server, create_tap_device
+from tapws import Server
+from tapws.services.dhcp import DhcpServer
+from tapws.services.tcp import EchoServer
 
 
 async def main():
-    virtual_ethernet = create_tap_device()
-    virtual_ethernet.up()
-
     ssl_context = None
     if os.environ.get('WITH_SSL', 'False').lower() in ('true', '1', 'yes'):
         fullchain_cert_path = os.environ.get('SSL_CERT_PATH',
@@ -35,11 +35,19 @@ async def main():
     host = os.environ.get('HOST', '0.0.0.0')
     port = os.environ.get('PORT', '8080')
 
-    server = Server(device=virtual_ethernet,
-                    host=host,
+    dhcp_server = DhcpServer(host, 67)
+    tcp_server = EchoServer(host, 9998)
+
+    server = Server(host=host,
                     port=port,
-                    ssl=ssl_context)
-    print('Starting server...')
+                    ssl=ssl_context,
+                    services=[dhcp_server, tcp_server])
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig,
+                                lambda: asyncio.create_task(server.stop()))
+
+    print('Starting service')
     await server.start()
 
 
@@ -47,5 +55,4 @@ if __name__ == '__main__':
     log_level = os.environ.get('LOG_LEVEL', 'ERROR').upper()
     logging.basicConfig(stream=sys.stdout, level=log_level)
     uvloop.install()
-
     asyncio.run(main(), debug=log_level == 'DEBUG')

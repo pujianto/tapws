@@ -2,17 +2,15 @@
 # -*- coding: utf-8 -*-
 
 import asyncio
-import ipaddress
 import logging
-import signal
 from functools import partial
 
 import websockets
-from dhcppython.packet import DHCPPacket
+from pytun import IFF_MULTI_QUEUE, IFF_NO_PI, IFF_TAP
 from pytun import Error as TunError
+from pytun import TunTapDevice
 
-from .device import create_tap_device
-from .utils import async_iter, format_mac, wrap_async
+from .utils import format_mac
 
 
 class Connection:
@@ -27,65 +25,51 @@ class Connection:
 
 class Server:
 
-    def __init__(self, host='0.0.0.0', port=8080, device=None, ssl=None):
+    def __init__(self,
+                 host='0.0.0.0',
+                 port=8080,
+                 ssl=None,
+                 services=[],
+                 **kwargs):
         self.host = host
         self.port = port
-        self.connections = set()
-        if device is None:
-            device = create_tap_device()
-            device.up()
-        self.tap = device
+
+        self.tap = TunTapDevice('tap0', flags=(IFF_TAP | IFF_NO_PI | IFF_MULTI_QUEUE))
+        self.tap.addr = kwargs.get('ip', '10.11.12.1')
+
+        self.tap.netmask = kwargs.get('netmask', '255.255.255.0')
+        self.tap.mtu = kwargs.get('mtu', 1500)
         self.hw_addr = format_mac(self.tap.hwaddr)
+        self._services = services
+        self._connections = set()
+        self.ssl = ssl
+        self.loop = kwargs.get('loop', asyncio.get_running_loop())
         # refs: https://www.iana.org/assignments/ethernet-numbers/ethernet-numbers.xhtml
         self.broadcast_addr = 'ff:ff:ff:ff:ff:ff'
         self.whitelist_macs = ('33:33:', '01:00:5e:', '00:52:02:')
-        self.ws_server = websockets.serve(self.websocket_handler,
-                                          self.host,
-                                          self.port,
-                                          ssl=ssl)
-        self.waiter = asyncio.Future()
 
-    async def broadcast(self, message):
+    def broadcast(self):
+        message = self.tap.read(1024 * 4)
         dst_mac = format_mac(message[:6])
-        async for connection in async_iter(self.connections):
+        for connection in self._connections.copy():
             try:
-
                 logging.debug(
                     f'Sending to {dst_mac} | connection: {connection.mac} | hwaddr: {self.hw_addr}'
                 )
 
                 if dst_mac in [self.broadcast_addr, connection.mac]:
-                    await connection.websocket.send(message)
+                    asyncio.create_task(connection.websocket.send(message))
                     continue
 
                 if dst_mac.startswith(self.whitelist_macs):
-                    await connection.websocket.send(message)
-            except websockets.exceptions.ConnectionClosed:
-                logging.debug('client disconnected')
+                    return asyncio.create_task(connection.websocket.send(message))
+
             except Exception as e:
                 logging.error(f'Error broadcasting message to client: {e}')
 
-    def tap_read(self):
-        try:
-            message = self.tap.read(1024 * 4)
-            asyncio.create_task(self.broadcast(message))
-        except TunError as e:
-            logging.error(f'Error reading from device: {e}')
-        except Exception as e:
-            logging.error(f'Unknown error reading from device: {e}')
-
-    @wrap_async
-    def tap_write_async(self, message):
-        try:
-            self.tap.write(message)
-        except TunError as e:
-            logging.error(f'Error writing to device: {e}')
-        except Exception as e:
-            logging.error(f'Unknown error writing to device: {e}')
-
     async def websocket_handler(self, websocket):
         connection = Connection(websocket, None)
-        self.add_connection(connection)
+        self._connections.add(connection)
         try:
             async for message in websocket:
                 mac = format_mac(message[6:12])
@@ -93,70 +77,35 @@ class Server:
                     f'incoming from {mac} | connection: {connection.mac} | hwaddr: {self.hw_addr}'
                 )
                 connection.mac = mac
-                await self.tap_write_async(message)
+                try:
+                    self.tap.write(message)
+                except TunError as e:
+                    logging.error(f'Error writing to device: {e}')
+                except Exception as e:
+                    logging.error(f'Unknown error writing to device: {e}')
 
         except websockets.exceptions.ConnectionClosed as e:
             logging.debug(f'Client disconnected: {e}')
         except Exception as e:
             logging.error(e)
         finally:
-            self.remove_connection(connection)
-
-    def add_connection(self, connection):
-        self.connections.add(connection)
-
-    def remove_connection(self, connection):
-        self.connections.remove(connection)
-
-    def cleanup(self, sig):
-        asyncio.create_task(self.stop())
+            self._connections.remove(connection)
 
     async def start(self):
-        logging.info('Starting server...')
-        loop = asyncio.get_running_loop()
-        for sig in (signal.SIGINT, signal.SIGTERM):
-            loop.add_signal_handler(sig, self.cleanup, sig)
+        self.tap.up()
+        logging.info('Starting service...')
 
-        loop.add_reader(self.tap.fileno(), partial(self.tap_read))
+        self.loop.add_reader(self.tap.fileno(), partial(self.broadcast))
 
-        async with self.ws_server:
-            await self.waiter
-        self.tap.close()
+        ws = websockets.serve(self.websocket_handler,
+                              self.host,
+                              self.port,
+                              ssl=self.ssl)
+        self.ws_server = await ws
+        await self.ws_server.wait_closed()
 
     async def stop(self):
-        self.waiter.set_result(None)
-
-
-class DhcpServerProtocol(asyncio.DatagramProtocol):
-    """_summary_
-    Support for DHCPv4
-    Args:
-        asyncio (_type_): _description_
-    """
-
-    def __init__(self, max_lease_duration=86400, server=None):
-        self.allocated_ips_table = set()
-        self.dhcp_cookie = '99.130.83.99'
-        pass
-
-    def connection_made(self, transport):
-        return super().connection_made(transport)
-
-    def datagram_received(self, data, addr):
-        packet = DHCPPacket.from_bytes(data)
-        
-
-    def build_dhcp_packet(self):
-        pass
-
-    def send_dhcp_offer(self):
-        pass
-
-    def send_dhcp_ack(self):
-        pass
-
-    def dhcp_release(self):
-        pass
-
-    def schedule_release(self):
-        pass
+        for service in self._services:
+            service.close()
+        self.ws_server.close()
+        self.tap.close()

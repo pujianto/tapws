@@ -10,6 +10,7 @@ from functools import partial
 from ipaddress import IPv4Address
 from typing import List, Optional
 
+import iptc
 from pytun import IFF_NO_PI, IFF_TAP
 from pytun import Error as TunError
 from pytun import TunTapDevice
@@ -52,6 +53,7 @@ class Server:
         interface_name: str,
         host: str = '0.0.0.0',
         port: int = 8080,
+        public_interface_name: Optional[str] = None,
         ssl: Optional[ssl.SSLContext] = None,
         services: Optional[List[TapwsService]] = None,
     ) -> None:
@@ -69,6 +71,7 @@ class Server:
         self.tap.netmask = str(self.iface_network.netmask)
         self.tap.mtu = 1500
         self.hw_addr = format_mac(self.tap.hwaddr)
+        self.public_iface_name = public_interface_name
 
         if services is not None:
             for service in services:
@@ -127,6 +130,36 @@ class Server:
         finally:
             self._connections.remove(connection)
 
+    def bootstrap_netfilter(self) -> None:
+        logging.info('Bootstrapping netfilter (iptables) rules ...')
+
+        forward_chain = iptc.Chain(iptc.Table(iptc.Table.FILTER), 'FORWARD')
+
+        ingress_rule = iptc.Rule()
+        ingress_rule.in_interface = self.public_iface_name
+        ingress_rule.out_interface = self.iface_name
+
+        ingress_rule_filter = iptc.Match(ingress_rule, 'state')
+        ingress_rule_filter.state = 'RELATED,ESTABLISHED'
+
+        ingress_rule.add_match(ingress_rule_filter)
+        ingress_rule.target = iptc.Target(ingress_rule, 'ACCEPT')
+
+        egress_rule = iptc.Rule()
+        egress_rule.in_interface = self.iface_name
+        egress_rule.out_interface = self.public_iface_name
+        egress_rule.target = iptc.Target(egress_rule, 'ACCEPT')
+
+        postrouting_chain = iptc.Chain(iptc.Table(iptc.Table.NAT),
+                                       'POSTROUTING')
+        translation_rule = iptc.Rule()
+        translation_rule.out_interface = self.public_iface_name
+        translation_rule.target = iptc.Target(translation_rule, 'MASQUERADE')
+
+        forward_chain.insert_rule(ingress_rule)
+        forward_chain.insert_rule(egress_rule)
+        postrouting_chain.insert_rule(translation_rule)
+
     async def start(self) -> None:
         self.tap.up()
         logging.info('Starting service...')
@@ -138,6 +171,10 @@ class Server:
                               self.port,
                               ssl=self.ssl)
         self.ws_server = await ws
+
+        if self.public_iface_name is not None:
+            self.bootstrap_netfilter()
+
         for service in self._svcs:
             await service.start()
         await self.ws_server.wait_closed()

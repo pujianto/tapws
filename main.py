@@ -38,9 +38,12 @@ async def main():
     host = os.environ.get('HOST', '0.0.0.0')
     port = int(os.environ.get('PORT', '8080'))
 
-    interface_ip = IPv4Address(os.environ.get('INTERFACE_IP', '10.11.12.1'))
+    # Specify the (public) network interface name you want to 'share' with tap devices
+    public_interface_name = os.environ.get('PUBLIC_INTERFACE_NAME', None)
+
+    interface_ip = IPv4Address(os.environ.get('INTERFACE_IP'))
     interface_name = 'tapx'
-    interface_subnet = 24
+    interface_subnet = int(os.environ.get('INTERFACE_SUBNET', '24'))
     interface_network = IPv4Network(f'{interface_ip}/{interface_subnet}',
                                     strict=False)
 
@@ -59,6 +62,7 @@ async def main():
                     interface_ip=interface_ip,
                     interface_name=interface_name,
                     interface_subnet=interface_subnet,
+                    public_interface_name=public_interface_name,
                     services=services)
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):

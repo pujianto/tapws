@@ -7,6 +7,7 @@ import logging
 import ssl
 from asyncio import create_task
 from functools import partial
+from ipaddress import IPv4Address
 from typing import List, Optional
 
 from pytun import IFF_NO_PI, IFF_TAP
@@ -16,7 +17,7 @@ from websockets import exceptions as websockets_exceptions
 from websockets.server import WebSocketServerProtocol
 from websockets.server import serve as websockets_serve
 
-from .services.base import BaseService
+from .services.base import BaseService as TapwsService
 from .utils import format_mac
 
 
@@ -46,20 +47,20 @@ class Server:
 
     def __init__(
         self,
+        interface_ip: IPv4Address,
+        interface_subnet: int,
+        interface_name: str,
         host: str = '0.0.0.0',
         port: int = 8080,
         ssl: Optional[ssl.SSLContext] = None,
-        interface_name: str = 'tap0',
-        interface_ip: str = '10.11.12.1',
-        interface_subnet: int = 24,
-        services: Optional[List[BaseService]] = None,
+        services: Optional[List[TapwsService]] = None,
     ) -> None:
 
         self.host = host
         self.port = port
 
         self.iface_name = interface_name
-        self.iface_ip = ipaddress.ip_address(interface_ip)
+        self.iface_ip = str(interface_ip)
         self.iface_network = ipaddress.ip_network(
             f'{self.iface_ip}/{interface_subnet}', strict=False)
 
@@ -70,7 +71,8 @@ class Server:
         self.hw_addr = format_mac(self.tap.hwaddr)
 
         if services is not None:
-            self._svcs = services
+            for service in services:
+                self._svcs.append(service)
 
         self._connections = set()
         self.ssl = ssl
@@ -136,11 +138,13 @@ class Server:
                               self.port,
                               ssl=self.ssl)
         self.ws_server = await ws
+        for service in self._svcs:
+            await service.start()
         await self.ws_server.wait_closed()
 
     async def stop(self) -> None:
 
         for service in self._svcs:
-            service.close()
+            await service.stop()
         self.ws_server.close()
         self.tap.close()

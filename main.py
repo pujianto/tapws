@@ -1,15 +1,18 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import asyncio
 import logging
 import os
 import signal
 import ssl
 import sys
+from ipaddress import IPv4Address, IPv4Network
 
 import uvloop
 
 from tapws import Server
-from tapws.services.dhcp import DhcpServer
-from tapws.services.tcp import EchoServer
+from tapws.services import DHCPServer
 
 
 async def main():
@@ -33,15 +36,30 @@ async def main():
                                     keyfile=key_path,
                                     password=passphrase)
     host = os.environ.get('HOST', '0.0.0.0')
-    port = os.environ.get('PORT', '8080')
+    port = int(os.environ.get('PORT', '8080'))
 
-    dhcp_server = DhcpServer(host, 67)
-    tcp_server = EchoServer(host, 9998)
+    interface_ip = IPv4Address(os.environ.get('INTERFACE_IP', '10.11.12.1'))
+    interface_name = 'tapx'
+    interface_subnet = 24
+    interface_network = IPv4Network(f'{interface_ip}/{interface_subnet}',
+                                    strict=False)
 
+    services = []
+
+    # DHCP server
+    if os.environ.get('WITH_DHCP', 'True').lower() in ('true', '1', 'yes'):
+        dhcp_server = DHCPServer(interface_ip, interface_network,
+                                 interface_name)
+        services.append(dhcp_server)
+
+    # Main server
     server = Server(host=host,
                     port=port,
                     ssl=ssl_context,
-                    services=[dhcp_server, tcp_server])
+                    interface_ip=interface_ip,
+                    interface_name=interface_name,
+                    interface_subnet=interface_subnet,
+                    services=services)
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig,

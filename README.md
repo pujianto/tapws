@@ -42,6 +42,10 @@ This project listens to WebSocket connections and forwards the data to a virtual
 
 **Note:** If you want to run in `wss://` protocol locally, consider to use [mkcert](https://github.com/FiloSottile/mkcert) instead of standard self-signed certificate.
 
+## Todo
+
+- Currently the DHCP server only support discover and request. Need to add renew and release.
+
 ### References
 
 - https://github.com/copy/v86/blob/master/src/browser/network.js

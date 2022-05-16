@@ -2,67 +2,45 @@
 
 ## A simple virtual network interface over websocket
 
-This project complements [V86](https://github.com/copy/v86) for its networking feature. Inspired by [WebSockets Proxy](https://github.com/benjamincburns/websockproxy)
+This project listens to WebSocket connections and forwards the data to a virtual network interface in an ethernet frame format.
 
-## How to use
+## Example usage
 
-### Using Docker
+### JSLinux
 
-#### Pre-built Docker image
+- Run tapws container. `docker run --rm -p 8080:8080 --privileged -it pujianto/tapws`
+- Open this emulator: https://bellard.org/jslinux/vm.html?url=alpine-x86.cfg&mem=192&net_url=ws://localhost:8080 on your browser.
+- To test the internet connection, run `curl -v ipinfo.io` from the emulator
 
-- `docker pull pujianto/tapws`
-- `docker run --rm -p 8080:8080 --privileged -it pujianto/tapws`
+### jor1k
 
-#### Local Build
+- Run tapws container. `docker run --rm -p 8080:8080 --privileged -it pujianto/tapws`
+- Open this emulator: https://s-macke.github.io/jor1k/demos/main.html?user=PhFebTBhrE&cpu=asm&n=1&relayURL=ws%3A%2F%2Flocalhost%3A8080 on your browser.
+- To test the internet connection, run `curl -v ipinfo.io` from the emulator
 
-- Clone this repository
-- Run `docker build -t tapws .`
-- Run `docker run --rm -p 8080:8080 --privileged tapws`
+### V86
 
-![](./Screenshot_20220507_231944.jpeg)
-
-The docker image doesn't have dhcpd, so you need to set up your own network configuration.
-
-For example, we run Archlinux inside a web browser.
-you can run the following command on the "client side" (the one that run in the browser):
-
-- `ip addr add 10.11.12.2/24 dev enp0s5`
-- `ip link set enp0s5 up`
-
-If you want to make your network accessible from the outside, you can run the following command on the **"client"** side:
-
-- `ip route add default via 10.11.12.1 dev enp0s5`
-- `echo "nameserver 1.1.1.1" >> /etc/resolv.conf`
-
-Run these iptables commands from inside the tapws docker container:
-
-- `iptables -A FORWARD -i eth0 -o tap0 -m state --state RELATED,ESTABLISHED -j ACCEPT`
-- `iptables -A FORWARD -i tap0 -o eth0 -j ACCEPT`
-- `iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE`
-
-If your "client" side OS runs a service (e.g. sshd), you can forward the port to the tapws container.
-For example, assuming you have sshd running on port 22 on the "client" side and want to forward it to the tapws container on port 2022, you can run the following command from inside the tapws container:
-
-- `iptables -t nat -A PREROUTING -p tcp --dport 2022 -j DNAT --to-destination 10.11.12.2:22`
-- `iptables -t nat -A POSTROUTING -p tcp -d 10.11.12.2 --dport 22 -j SNAT --to-source 10.11.12.1`
-
-Now you should able to ssh to the "client" side from public side (laptop) using `ssh localhost -p 2022`
+- Run tapws container. `docker run --rm -p 8080:8080 --privileged -it pujianto/tapws`
+- Open https://copy.sh/v86
+- Prepare a 32 bit OS image and mount it to CD drive or HDD Drive
+- Set `ws://localhost:8080` as the Network proxy URL
 
 ## Environment Variables
 
 - `LOG_LEVEL`: set the log level, default is `ERROR`
 - `HOST`: set the websocket listen host, , default is `0.0.0.0`
 - `PORT`: set the websocket listen port, default is `8080`
+
 - `WITH_SSL`: set to `true` to enable ssl, default is `false`
 - `SSL_CERT`: set the ssl certificate file path, default is `/app/certs/fullchain.pem`
 - `SSL_KEY`: set the ssl key file path, default is `/app/certs/privkey.pem`
 - `SSL_PASSPHRASE`: set the ssl passphrase (private key's password), default is `None`
 
-**Note:** If you want to test `wss://` protocol in local, consider to use [mkcert](https://github.com/FiloSottile/mkcert) instead of standard self-signed certificate.
+- `WITH_DHCP`: set to `true` to enable dhcp, default is `true`
+- `INTERFACE_IP`: set the tap interface ip, default is `10.11.12.254` (on Dockerfile), `None` on the Python side (it will throw an error if not set).
+- `PUBLIC_INTERFACE_NAME`: set the public interface name, default is `eth0` (on Dockerfile), `None` on the Python side. If `PUBLIC_INTERFACE_NAME` is `None`, the emulator can't access the internet.
 
-### TODO
-
-- Add iptables integration
+**Note:** If you want to run in `wss://` protocol locally, consider to use [mkcert](https://github.com/FiloSottile/mkcert) instead of standard self-signed certificate.
 
 ### References
 

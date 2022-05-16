@@ -142,10 +142,8 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
             request_type = DHCPPacket.request_type(packet)
             logging.debug(f'request_type: {request_type}')
 
-            response = self._build_response(request_type, packet)
+            self._build_response(request_type, packet)
 
-            if response is not None:
-                self.broadcast(bytes(response))
         except Exception as e:
             logging.warning(f'Error parsing packet: {e}')
 

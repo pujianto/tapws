@@ -1,6 +1,6 @@
+dpkt==1.9.7.2
 python-iptables==1.0.0
 python-pytun==2.4.1
-scapy==2.4.5
 uvloop==0.16.0
 websockets==10.3
 

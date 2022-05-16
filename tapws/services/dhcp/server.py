@@ -40,8 +40,6 @@ class DHCPServer(BaseService):
 
             if ip in self.reserved_ips:
                 continue
-            if len(self._dhcp_leases) < 1:
-                return IPv4Address(ip)
             if ip not in leased_ips:
                 return IPv4Address(ip)
 

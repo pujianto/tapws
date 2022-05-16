@@ -29,7 +29,7 @@ class Connection:
         self._mac = mac
         self.websocket = websocket
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'Connection({self.websocket.id})'
 
     @property

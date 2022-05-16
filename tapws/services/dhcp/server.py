@@ -33,15 +33,18 @@ class DHCPServer(BaseService):
         ip_start = int(self.ip_network.network_address + 1)
         ip_end = int(self.ip_network.broadcast_address - 1)
 
+        leased_ips = [int(lease.ip) for lease in self._dhcp_leases]
+
         for ip in range(ip_start, ip_end):
             logging.debug(f'Checking IP {IPv4Address(ip)}')
+
             if ip in self.reserved_ips:
                 continue
             if len(self._dhcp_leases) < 1:
                 return IPv4Address(ip)
-            for lease in self._dhcp_leases:
-                if ip != int(lease.ip):
-                    return IPv4Address(ip)
+            if ip not in leased_ips:
+                return IPv4Address(ip)
+
         return None
 
     def is_ip_available(self, ip: IPv4Address) -> bool:

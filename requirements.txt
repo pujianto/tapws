@@ -1,4 +1,4 @@
-dhcppython==0.1.4
+dpkt==1.9.7.2
 python-iptables==1.0.0
 python-pytun==2.4.1
 uvloop==0.16.0

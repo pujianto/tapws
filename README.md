@@ -8,19 +8,19 @@ This project listens to WebSocket connections and forwards the data to a virtual
 
 ### JSLinux
 
-- Run tapws container. `docker run --rm -p 8080:8080 --privileged -it pujianto/tapws`
+- Run tapws container. `docker run --pull=always --rm -p 8080:8080 --privileged -it pujianto/tapws`
 - Open this emulator: https://bellard.org/jslinux/vm.html?url=alpine-x86.cfg&mem=192&net_url=ws://localhost:8080 on your browser.
 - To test the internet connection, run `curl -v ipinfo.io` from the emulator
 
 ### jor1k
 
-- Run tapws container. `docker run --rm -p 8080:8080 --privileged -it pujianto/tapws`
+- Run tapws container. `docker run --pull=always --rm -p 8080:8080 --privileged -it pujianto/tapws`
 - Open this emulator: https://s-macke.github.io/jor1k/demos/main.html?user=PhFebTBhrE&cpu=asm&n=1&relayURL=ws%3A%2F%2Flocalhost%3A8080 on your browser.
 - To test the internet connection, run `curl -v ipinfo.io` from the emulator
 
 ### V86
 
-- Run tapws container. `docker run --rm -p 8080:8080 --privileged -it pujianto/tapws`
+- Run tapws container. `docker run --pull=always --rm -p 8080:8080 --privileged -it pujianto/tapws`
 - Open https://copy.sh/v86
 - Prepare a 32 bit OS image and mount it to CD drive or HDD Drive
 - Set `ws://localhost:8080` as the Network proxy URL

@@ -45,6 +45,7 @@ class Connection:
 
 class Server:
     _svcs = []
+    _connections = set()
 
     def __init__(
         self,
@@ -77,7 +78,6 @@ class Server:
             for service in services:
                 self._svcs.append(service)
 
-        self._connections = set()
         self.ssl = ssl
         self.loop = asyncio.get_running_loop()
         # refs: https://www.iana.org/assignments/ethernet-numbers/ethernet-numbers.xhtml
@@ -131,6 +131,9 @@ class Server:
             self._connections.remove(connection)
 
     def bootstrap_netfilter(self) -> None:
+        if self.public_iface_name is None:
+            return
+
         logging.info('Bootstrapping netfilter (iptables) rules ...')
 
         forward_chain = iptc.Chain(iptc.Table(iptc.Table.FILTER), 'FORWARD')
@@ -160,6 +163,14 @@ class Server:
         forward_chain.insert_rule(egress_rule)
         postrouting_chain.insert_rule(translation_rule)
 
+    def cleanup_netfilter(self) -> None:
+        if self.public_iface_name is None:
+            return
+
+        logging.info('Cleaning up netfilter (iptables) rules ...')
+        iptc.Chain(iptc.Table(iptc.Table.FILTER), 'FORWARD').flush()
+        iptc.Chain(iptc.Table(iptc.Table.NAT), 'POSTROUTING').flush()
+
     async def start(self) -> None:
         self.tap.up()
         logging.info('Starting service...')
@@ -172,8 +183,7 @@ class Server:
                               ssl=self.ssl)
         self.ws_server = await ws
 
-        if self.public_iface_name is not None:
-            self.bootstrap_netfilter()
+        self.bootstrap_netfilter()
 
         for service in self._svcs:
             await service.start()
@@ -181,6 +191,7 @@ class Server:
 
     async def stop(self) -> None:
 
+        self.cleanup_netfilter()
         for service in self._svcs:
             await service.stop()
         self.ws_server.close()

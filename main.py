@@ -25,6 +25,7 @@ async def main():
 
     print('Starting service')
     await server.start()
+    print('Service Stopped')
 
 
 if __name__ == '__main__':

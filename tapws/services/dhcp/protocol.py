@@ -24,9 +24,9 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         self._srv = server
         self._response_map = {
             dhcp.DHCPDISCOVER: self.send_offer,
-            dhcp.DHCPREQUEST: self.send_ack,
+            dhcp.DHCPREQUEST: self.send_response,
             dhcp.DHCPRELEASE: self.release_lease,
-            # dhcp.DHCPDECLINE: TODO: add support for declined leases
+            dhcp.DHCPDECLINE: self.reinitialize_lease,
         }
         logger = logging.getLogger('tapws.dhcp')
         self.is_debug = logger.isEnabledFor(logging.DEBUG)
@@ -67,13 +67,14 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                 router_ip=self._srv.config.server_router,
                 netmask_ip=self._srv.config.server_network.netmask,
                 mac=packet.chaddr,
+                secs=packet.secs,
                 xid=packet.xid,
                 lease_time=self._srv.config.lease_time_second,
                 dns_ips=self._srv.config.dns_ips)
 
         except IPv4UnavailableError as e:
             self.logger.warning(f'No more IP addresses available: {e}')
-            response = DHCPPacket.Nak(mac=packet.chaddr, xid=packet.xid)
+            return
         except Exception as e:
             self.logger.error(f'(offer) DHCP server error {e}')
             return
@@ -86,55 +87,59 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         if lease is not None:
             self._srv.remove_lease(lease)
 
-    async def send_ack(self, packet: DHCPPacket) -> None:
+    async def reinitialize_lease(self, packet: DHCPPacket) -> None:
+        """
+        Reinitialize lease for client. The ACK is sent to client and the client detects ARP conflict (IP already in use by other client).
+        Resend ACK to the client.
+        """
+        if self.is_debug:
+            self.logger.debug(f'DHCPDECLINE recieved: {packet.chaddr}')
+
+        if self.validate_server_id(packet) is False:
+            return
+
+        lease = self._srv.get_lease_by_mac(packet.chaddr)
+        if lease and lease.ip == packet.ciaddr:
+            if self.is_debug:
+                self.logger.debug(f'Reinitialize lease for client: {lease}')
+
+            # If lease found, delete it and let `send_response` take care of it
+            await self.release_lease(packet)
+
+        return await self.send_response(packet)
+
+    async def send_response(self, packet: DHCPPacket) -> None:
         try:
-            if packet.ciaddr > 0:
-                requested_ip = IPv4Address(packet.ciaddr)
-                if self.is_debug:
-                    self.logger.debug(
-                        f'renew lease request for {requested_ip}')
-                lease = self._srv.get_lease_by_mac(packet.chaddr)
-                if lease is None:
-                    if self.is_debug:
-                        self.logger.debug(
-                            f'no lease found for {packet.chaddr}. sending NAK')
-                    raise ValueError(f'No lease found for {packet.chaddr}')
-                if lease.ip != packet.ciaddr:
-                    if self.is_debug:
-                        self.logger.debug(
-                            f'lease IP mismatch: {lease.ip} != {packet.ciaddr}. sending NAK'
-                        )
-                    raise ValueError(
-                        f'lease IP mismatch: {lease.ip} != {packet.ciaddr}')
+            if self.validate_server_id(packet) is False:
+                return
 
+            # Prioritize client's IP address options over ciaddr
+            client_ip_int_or_byte = packet.get_option_value(
+                dhcp.DHCP_OPT_REQ_IP) or packet.ciaddr
+
+            client_ip = IPv4Address(client_ip_int_or_byte)
+
+            if self.is_debug:
+                self.logger.debug(f'Client IP: {client_ip}')
+                self.logger.debug(
+                    f'ciaddr: {packet.ciaddr}. If it is not zero, we already know each other.'
+                )
+                self.logger.debug(
+                    f'Requested IP (OPT): {client_ip_int_or_byte}.')
+
+            lease = self._srv.get_lease_by_mac(packet.chaddr)
+            if lease:
                 self._srv.renew_lease(lease)
-
             else:
-                req_ip = packet.get_option_value(dhcp.DHCP_OPT_REQ_IP)
-                if req_ip is None:
-                    if self.is_debug:
-                        self.logger.debug(f'No requested IP. Sending NAK')
-                    raise ValueError(f'No requested IP')
-
-                requested_ip = IPv4Address(req_ip)
-                if self.is_debug:
-                    self.logger.debug(f'new IP request: {requested_ip}')
-
-                if self._srv.is_ip_available(requested_ip) is False:
-                    if self.is_debug:
-                        self.logger.info(
-                            f'Requested IP {requested_ip} is not available. sending NAK'
-                        )
-                    raise ValueError(
-                        f'Requested IP {requested_ip} is not available')
-                lease = self._srv.create_lease(packet.chaddr, requested_ip)
+                lease = self._srv.create_lease(packet.chaddr, client_ip)
                 self._srv.add_lease(lease)
 
             response = DHCPPacket.Ack(
-                ip=requested_ip,
+                ip=client_ip,
                 router_ip=self._srv.config.server_router,
                 netmask_ip=self._srv.config.server_network.netmask,
                 mac=packet.chaddr,
+                secs=packet.secs,
                 xid=packet.xid,
                 lease_time=self._srv.config.lease_time_second,
                 dns_ips=self._srv.config.dns_ips)
@@ -152,6 +157,23 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         except Exception as e:
             self.logger.error(f'(ack) DHCP server error {e}')
             return
+
+    def validate_server_id(self, packet: DHCPPacket) -> bool:
+        """ 
+        Validate server id in the packet. 
+        If server id is present and it is not equal to the server id, return False.
+        """
+
+        server_id = packet.get_option_value(dhcp.DHCP_OPT_SERVER_ID)
+        if server_id is None:
+            return True
+        if server_id != self._srv.config.server_ip.packed:
+            if self.is_debug:
+                self.logger.debug(
+                    f'Server ID missmatch with server IP. Probably it is not for us.'
+                )
+            return False
+        return True
 
     async def send_nak(self, packet: DHCPPacket) -> None:
 

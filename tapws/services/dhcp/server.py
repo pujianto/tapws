@@ -6,7 +6,7 @@ import logging
 import socket
 from functools import partial
 from ipaddress import IPv4Address
-from typing import Optional
+from typing import List, Optional
 
 from ..base import BaseService
 from .config import DHCPConfig
@@ -36,21 +36,23 @@ class DHCPServer(BaseService):
         self.is_debug = logger.isEnabledFor(logging.DEBUG)
         self.logger = logger
 
-    def get_usable_ip(self) -> Optional[IPv4Address]:
+    def get_usable_ip(self, excludes: List[IPv4Address] = []) -> IPv4Address:
         leased_ips = [int(lease.ip) for lease in self._dhcp_leases]
         if self.is_debug:
             self.logger.debug(f'leased ips: {leased_ips}')
+
+        excludes_int = [int(ip) for ip in excludes]
         for ip in self.config.server_network.hosts():
 
             if self.is_debug:
                 self.logger.debug(f'Checking IP {IPv4Address(ip)}')
-
+            if int(ip) in excludes_int:
+                continue
             if int(ip) in self.reserved_ips:
                 continue
             if int(ip) not in leased_ips:
                 return ip
-
-        return None
+        raise IPv4UnavailableError(f'DHCP server is full')
 
     def is_ip_available(self, ip: IPv4Address) -> bool:
         if int(ip) in self.reserved_ips:
@@ -93,9 +95,8 @@ class DHCPServer(BaseService):
     def create_lease(self,
                      mac: bytes,
                      ip: Optional[IPv4Address] = None) -> Lease:
+
         ip = ip or self.get_usable_ip()
-        if ip is None:
-            raise IPv4UnavailableError
         return Lease(mac, int(ip), self.config.lease_time_second)
 
     async def start(self) -> None:

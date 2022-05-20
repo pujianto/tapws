@@ -34,6 +34,7 @@ class DHCPPacket(dhcp.DHCP):
               ip: IPv4Address,
               router_ip: IPv4Address,
               netmask_ip: IPv4Address,
+              secs: int,
               mac: str,
               xid: int,
               lease_time: int = 3600,
@@ -41,6 +42,7 @@ class DHCPPacket(dhcp.DHCP):
         packet = cls(chaddr=mac,
                      op=dhcp.DHCP_OP_REPLY,
                      xid=xid,
+                     secs=secs,
                      yiaddr=int(ip),
                      siaddr=int(router_ip))
         message_type = bytes(chr(dhcp.DHCPOFFER), 'ascii')
@@ -58,12 +60,14 @@ class DHCPPacket(dhcp.DHCP):
             router_ip: IPv4Address,
             netmask_ip: IPv4Address,
             mac: str,
+            secs: int,
             xid: int,
             lease_time: int = 3600,
             dns_ips: list = ['1.1.1.1']) -> 'DHCPPacket':
         packet = cls(op=dhcp.DHCP_OP_REPLY,
                      chaddr=mac,
                      xid=xid,
+                     secs=secs,
                      yiaddr=int(ip),
                      siaddr=int(router_ip))
         message_type = bytes(chr(dhcp.DHCPACK), 'ascii')
@@ -72,8 +76,6 @@ class DHCPPacket(dhcp.DHCP):
                                          dns_ips=dns_ips,
                                          router_ip=router_ip,
                                          netmask=netmask_ip)
-        packet.opts.append(
-            (dhcp.DHCP_OPT_MSGTYPE, bytes(chr(dhcp.DHCPACK), 'ascii')))
 
         return packet
 

@@ -10,6 +10,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from .server import DHCPServer
 
+from dpkt import Error as DpktError
+
 from .packet import DHCPPacket, IPv4UnavailableError, dhcp
 
 
@@ -24,6 +26,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
             dhcp.DHCPDISCOVER: self.send_offer,
             dhcp.DHCPREQUEST: self.send_ack,
             dhcp.DHCPRELEASE: self.release_lease,
+            # dhcp.DHCPDECLINE: TODO: add support for declined leases
         }
         logger = logging.getLogger('tapws.dhcp')
         self.is_debug = logger.isEnabledFor(logging.DEBUG)
@@ -48,6 +51,8 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                 cmd = self._response_map.get(packet.request_type, None)
                 if cmd:
                     asyncio.create_task(cmd(packet))
+        except DpktError as e:
+            self.logger.info(f'Invalid packet received: {e}')
 
         except Exception as e:
             self.logger.warning(f'Error parsing packet: {e}')
@@ -69,9 +74,6 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         except IPv4UnavailableError as e:
             self.logger.warning(f'No more IP addresses available: {e}')
             response = DHCPPacket.Nak(mac=packet.chaddr, xid=packet.xid)
-        except ValueError as e:
-            self.logger.warning(f'Invalid IP address: {e}')
-            return
         except Exception as e:
             self.logger.error(f'(offer) DHCP server error {e}')
             return

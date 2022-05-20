@@ -5,7 +5,6 @@ import asyncio
 import logging
 from asyncio import create_task
 from functools import partial
-from typing import Optional
 
 from pytun import IFF_NO_PI, IFF_TAP
 from pytun import Error as TunError
@@ -15,30 +14,11 @@ from websockets.server import WebSocketServerProtocol
 from websockets.server import serve as websockets_serve
 
 from .config import ServerConfig
+from .connection import Connection
 from .services.dhcp.config import DHCPConfig
 from .services.dhcp.server import DHCPServer
-from .services.netfilter.netfilter import Netfilter
+from .services.netfilter import Netfilter
 from .utils import format_mac
-
-
-class Connection:
-
-    def __init__(self,
-                 websocket: WebSocketServerProtocol,
-                 mac: Optional[str] = None) -> None:
-        self._mac = mac
-        self.websocket = websocket
-
-    def __repr__(self) -> str:
-        return f'Connection({self.websocket.id})'
-
-    @property
-    def mac(self) -> Optional[str]:
-        return self._mac
-
-    @mac.setter
-    def mac(self, mac) -> None:
-        self._mac = mac
 
 
 class Server:
@@ -49,8 +29,28 @@ class Server:
     ) -> None:
         self.config = config
         self._connections = set()
-        self.tap = TunTapDevice(self.config.private_interface,
-                                flags=(IFF_TAP | IFF_NO_PI))
+        logger = logging.getLogger('tapws.main')
+        self.is_debug = logger.isEnabledFor(logging.DEBUG)
+        self.logger = logger
+
+        try:
+            self.tap = TunTapDevice(self.config.private_interface,
+                                    flags=(IFF_TAP | IFF_NO_PI))
+        except TunError as e:
+            code = ''
+            msg = e.args
+            if len(e.args) == 2:
+                code, msg = e.args
+            self.logger.error(f'Error opening device: {code} {msg}')
+            if code == 2:
+                self.logger.error(
+                    'You need to run as root or with sudo to open the TAP interface'
+                )
+                self.logger.error(
+                    f'If you are using docker, add --privileged flag')
+            self.logger.error(f'Exiting...')
+            exit(1)
+
         self.tap.addr = str(self.config.intra_ip)
         self.tap.netmask = str(self.config.intra_network.netmask)
         self.tap.mtu = 1500
@@ -77,15 +77,11 @@ class Server:
         self.broadcast_addr = 'ff:ff:ff:ff:ff:ff'
         self.whitelist_macs = ('33:33:', '01:00:5e:', '00:52:02:')
 
-        logger = logging.getLogger('tapws.main')
-        self.is_debug = logger.isEnabledFor(logging.DEBUG)
-        self.logger = logger
-
     def broadcast(self) -> None:
         message = self.tap.read(1024 * 4)
         dst_mac = format_mac(message[:6])  # type: ignore
 
-        for connection in self._connections.copy():
+        for connection in list(self._connections):
             try:
                 if self.is_debug:
                     self.logger.debug(

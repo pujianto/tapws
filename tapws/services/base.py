@@ -1,14 +1,17 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-from abc import ABCMeta, abstractmethod
+from abc import ABC, abstractmethod
 from typing import Type
 
 
-class BaseService(metaclass=ABCMeta):
+class BaseService(ABC):
     """
     Base class for tapws services.
     """
+
+    def __init__(self) -> None:
+        pass
 
     @abstractmethod
     async def start(self) -> None:

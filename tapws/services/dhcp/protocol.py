@@ -4,150 +4,146 @@
 import asyncio
 import logging
 from asyncio.transports import DatagramTransport
-from typing import Optional
+from ipaddress import IPv4Address
+from struct import pack
+from typing import TYPE_CHECKING
 
-from .utils import DHCPPacket, IPv4UnavailableError, dhcp
+if TYPE_CHECKING:
+    from .server import DHCPServer
+
+from .packet import DHCPPacket, IPv4UnavailableError, dhcp
 
 
 class DHCPServerProtocol(asyncio.DatagramProtocol):
 
     broadcast_ip = '255.255.255.255'
     broadcast_port = 68
-    broadcast_mac = 'ff:ff:ff:ff:ff:ff'
 
-    def __init__(self, server) -> None:
+    def __init__(self, server: 'DHCPServer') -> None:
         self._srv = server
         self._response_map = {
-            'discover': self._send_offer,
-            'request': self._send_ack,
+            dhcp.DHCPDISCOVER: self.send_offer,
+            dhcp.DHCPREQUEST: self.send_ack,
+            dhcp.DHCPRELEASE: self.release_lease,
         }
+        logger = logging.getLogger('tapws.dhcp')
+        self.is_debug = logger.isEnabledFor(logging.DEBUG)
+        self.logger = logger
 
-    def broadcast(self, data: bytes) -> None:
-        self.transport.sendto(data, (self.broadcast_ip, self.broadcast_port))
+    def broadcast(self, packet: DHCPPacket) -> None:
+        if self.is_debug:
+            self.logger.debug(f'Broadcasting: {repr(packet)}')
+        self.transport.sendto(bytes(packet),
+                              (self.broadcast_ip, self.broadcast_port))
 
     def connection_made(self, transport: DatagramTransport) -> None:
         self.transport = transport
 
-    def _send_offer(self, packet: dhcp.DHCP) -> None:
+    def datagram_received(self, data: bytes, addr: tuple) -> None:
+        try:
+            packet = DHCPPacket(data)
+            if self.is_debug:
+                self.logger.debug(f'Incoming packet: {repr(packet)}')
+
+            if packet.request_type:
+                self._response_map.get(packet.request_type,
+                                       lambda packet: None)(packet)
+
+        except Exception as e:
+            self.logger.warning(f'Error parsing packet: {e}')
+            raise e
+
+    def send_offer(self, packet: DHCPPacket) -> None:
 
         try:
             lease = self._srv.create_lease(packet.chaddr)
-
-            response = dhcp.DHCP()
-            response.chaddr = packet.chaddr
-            response.op = dhcp.DHCP_OP_REPLY
-            response.xid = packet.xid
-            response.yiaddr = lease.ip
-            response.siaddr = int(self._srv.ip)
-
-            logging.debug(f'Lease time: {lease.lease_time}')
-
-            lease_time = int(float(lease.lease_time))
-            renew_time = int(lease.lease_time / 2)
-            rebind_time = int(renew_time + lease_time)
-
-            response.opts = []
-            response.opts.append(
-                (dhcp.DHCP_OPT_MSGTYPE, bytes(chr(dhcp.DHCPOFFER), 'ascii')))
-            response.opts.append(
-                (dhcp.DHCP_OPT_NETMASK, self._srv.ip_network.netmask.packed))
-            response.opts.append((dhcp.DHCP_OPT_RENEWTIME,
-                                  DHCPPacket.seconds_to_bytes(renew_time)))
-            response.opts.append((dhcp.DHCP_OPT_REBINDTIME,
-                                  DHCPPacket.seconds_to_bytes(rebind_time)))
-            response.opts.append((dhcp.DHCP_OPT_LEASE_SEC,
-                                  DHCPPacket.seconds_to_bytes(lease_time)))
-            response.opts.append(
-                (dhcp.DHCP_OPT_SERVER_ID, self._srv.ip.packed))
-            response.opts.append((dhcp.DHCP_OPT_ROUTER, self._srv.ip.packed))
-            response.opts.append(
-                (dhcp.DHCP_OPT_DNS_SVRS,
-                 b''.join(dns.packed for dns in self._srv.dns_ips)))
-
-            self.broadcast(bytes(response))
+            response = DHCPPacket.Offer(
+                ip=IPv4Address(lease.ip),
+                router_ip=self._srv.config.server_router,
+                netmask_ip=self._srv.config.server_network.netmask,
+                mac=packet.chaddr,
+                xid=packet.xid,
+                lease_time=self._srv.config.lease_time_second,
+                dns_ips=self._srv.config.dns_ips)
 
         except IPv4UnavailableError as e:
-            logging.warning(f'No more IP addresses available: {e}')
-            return None
+            self.logger.warning(f'No more IP addresses available: {e}')
+            response = DHCPPacket.Nak(mac=packet.chaddr, xid=packet.xid)
+        except Exception as e:
+            self.logger.error(f'(offer) DHCP server error {e}')
+            raise e
+        self.broadcast(response)
 
-    def _send_nack(self, packet: dhcp.DHCP) -> None:
-        response = dhcp.DHCP()
-        response.chaddr = packet.chaddr
-        response.op = dhcp.DHCP_OP_REPLY
-        response.xid = packet.xid
-        response.opts = []
-        response.opts.append(
-            (dhcp.DHCP_OPT_MSGTYPE, bytes(chr(dhcp.DHCPNAK), 'ascii')))
-        self.broadcast(bytes(response))
+    def release_lease(self, packet: DHCPPacket) -> None:
+        lease = self._srv.get_lease_by_mac(packet.chaddr)
+        if self.is_debug:
+            self.logger.debug(f'Release for lease:{lease} requested')
+        if lease is not None:
+            self._srv.remove_lease(lease)
 
-    def _send_ack(self, packet: dhcp.DHCP) -> None:
+    def send_ack(self, packet: DHCPPacket) -> None:
         try:
-            requested_ip = DHCPPacket.get_requested_ip(packet)
-            if requested_ip is None:
-                return None
+            if packet.ciaddr > 0:
+                requested_ip = IPv4Address(packet.ciaddr)
+                if self.is_debug:
+                    self.logger.debug(
+                        f'renew lease request for {requested_ip}')
+                lease = self._srv.get_lease_by_mac(packet.chaddr)
+                if lease is None:
+                    if self.is_debug:
+                        self.logger.debug(
+                            f'no lease found for {packet.chaddr}. sending NAK')
+                    return self.send_nak(packet)
+                if lease.ip != packet.ciaddr:
+                    if self.is_debug:
+                        self.logger.debug(
+                            f'lease IP mismatch: {lease.ip} != {packet.ciaddr}. sending NAK'
+                        )
+                    return self.send_nak(packet)
 
-            logging.debug(f'Requested IP: {requested_ip}')
+                lease.renew(self._srv.config.lease_time_second)
 
-            if not self._srv.is_ip_available(requested_ip):
-                logging.warning(
-                    f'Requested IP {requested_ip} is not available. sending NACK'
-                )
-                return self._send_nack(packet)
+            else:
+                req_ip = packet.get_option_value(dhcp.DHCP_OPT_REQ_IP)
+                if req_ip is None:
+                    if self.is_debug:
+                        self.logger.debug(f'No requested IP. Sending NAK')
+                    return self.send_nak(packet)
 
-            lease = self._srv.create_lease(packet.chaddr, requested_ip)
+                requested_ip = IPv4Address(req_ip)
+                if self.is_debug:
+                    self.logger.debug(f'new IP request: {requested_ip}')
 
-            response = dhcp.DHCP()
-            response.chaddr = packet.chaddr
-            response.op = dhcp.DHCP_OP_REPLY
-            response.xid = packet.xid
-            response.yiaddr = lease.ip
-            response.siaddr = int(self._srv.ip)
+                if self._srv.is_ip_available(requested_ip) is False:
+                    if self.is_debug:
+                        self.logger.info(
+                            f'Requested IP {requested_ip} is not available. sending NAK'
+                        )
+                    return self.send_nak(packet)
+                lease = self._srv.create_lease(packet.chaddr, requested_ip)
 
-            lease_time = int(float(lease.lease_time))
-            renew_time = int(lease.lease_time / 2)
-            rebind_time = int(renew_time + lease_time)
-
-            response.opts = []
-            response.opts.append(
-                (dhcp.DHCP_OPT_MSGTYPE, bytes(chr(dhcp.DHCPACK), 'ascii')))
-            response.opts.append(
-                (dhcp.DHCP_OPT_NETMASK, self._srv.ip_network.netmask.packed))
-            response.opts.append((dhcp.DHCP_OPT_RENEWTIME,
-                                  DHCPPacket.seconds_to_bytes(renew_time)))
-            response.opts.append((dhcp.DHCP_OPT_REBINDTIME,
-                                  DHCPPacket.seconds_to_bytes(rebind_time)))
-            response.opts.append((dhcp.DHCP_OPT_LEASE_SEC,
-                                  DHCPPacket.seconds_to_bytes(lease_time)))
-            response.opts.append(
-                (dhcp.DHCP_OPT_SERVER_ID, self._srv.ip.packed))
-            response.opts.append((dhcp.DHCP_OPT_ROUTER, self._srv.ip.packed))
-            response.opts.append(
-                (dhcp.DHCP_OPT_DNS_SVRS,
-                 b''.join(dns.packed for dns in self._srv.dns_ips)))
+            response = DHCPPacket.Ack(
+                ip=requested_ip,
+                router_ip=self._srv.config.server_router,
+                netmask_ip=self._srv.config.server_network.netmask,
+                mac=packet.chaddr,
+                xid=packet.xid,
+                lease_time=self._srv.config.lease_time_second,
+                dns_ips=self._srv.config.dns_ips)
 
             self._srv.add_lease(lease)
-            logging.debug(f'New lease registered: {lease}')
-
-            self.broadcast(bytes(response))
+            self.broadcast(response)
 
         except IPv4UnavailableError as e:
-            logging.warning(f'No more IP addresses available: {e}')
-            return None
-
-    def datagram_received(self, data: bytes, addr: tuple) -> None:
-        try:
-            packet = DHCPPacket.unpack(data)
-            logging.debug(f'Incoming packet: {repr(packet)}')
-
-            request_type = DHCPPacket.request_type(packet)
-            logging.debug(f'request_type: {request_type}')
-
-            self._build_response(request_type, packet)
-
+            if self.is_debug:
+                self.logger.info(f'requested IP is unavailable: {e}')
+            self.send_nak(packet)
         except Exception as e:
-            logging.warning(f'Error parsing packet: {e}')
+            self.logger.error(f'(ack) DHCP server error {e}')
+            raise e
 
-    def _build_response(self, request_type, packet) -> Optional[dhcp.DHCP]:
+    def send_nak(self, packet: DHCPPacket) -> None:
 
-        return self._response_map.get(request_type,
-                                      lambda packet: None)(packet)
+        response = DHCPPacket.Nak(mac=packet.chaddr, xid=packet.xid)
+
+        self.broadcast(response)

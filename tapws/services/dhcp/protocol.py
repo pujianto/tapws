@@ -5,7 +5,6 @@ import asyncio
 import logging
 from asyncio.transports import DatagramTransport
 from ipaddress import IPv4Address
-from struct import pack
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -51,7 +50,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
 
         except Exception as e:
             self.logger.warning(f'Error parsing packet: {e}')
-            raise e
+            return
 
     def send_offer(self, packet: DHCPPacket) -> None:
 
@@ -71,7 +70,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
             response = DHCPPacket.Nak(mac=packet.chaddr, xid=packet.xid)
         except Exception as e:
             self.logger.error(f'(offer) DHCP server error {e}')
-            raise e
+            return
         self.broadcast(response)
 
     def release_lease(self, packet: DHCPPacket) -> None:
@@ -140,10 +139,9 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
             self.send_nak(packet)
         except Exception as e:
             self.logger.error(f'(ack) DHCP server error {e}')
-            raise e
+            return
 
     def send_nak(self, packet: DHCPPacket) -> None:
 
         response = DHCPPacket.Nak(mac=packet.chaddr, xid=packet.xid)
-
         self.broadcast(response)

@@ -30,6 +30,8 @@ class DHCPServer(BaseService):
             int(self.config.server_network.broadcast_address),
         ]
 
+        self.leases_cleanup_timer = 60
+
         logger = logging.getLogger('tapws.dhcp')
         self.is_debug = logger.isEnabledFor(logging.DEBUG)
         self.logger = logger
@@ -125,7 +127,7 @@ class DHCPServer(BaseService):
 
     async def cleanup_leases(self) -> None:
         while True:
-            await asyncio.sleep(60)
+            await asyncio.sleep(self.leases_cleanup_timer)
             if self.is_debug:
                 self.logger.debug('Cleaning up leases')
             for lease in list(self._dhcp_leases):

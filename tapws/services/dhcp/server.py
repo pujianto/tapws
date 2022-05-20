@@ -88,17 +88,17 @@ class DHCPServer(BaseService):
 
     async def start(self) -> None:
 
-        self.logger.info('Starting DHCP service')
         factory = partial(DHCPServerProtocol, self)
         self.transport, self.protocol = await self.loop.create_datagram_endpoint(
             lambda: factory(),
             local_addr=('0.0.0.0', 67),
             allow_broadcast=True)
-        self.cleanup_task = asyncio.create_task(self.cleanup_leases())
+
         self.transport.get_extra_info('socket').setsockopt(
             socket.SOL_SOCKET, 25, bytes(self.config.bind_interface, 'utf-8'))
 
         name = '%s:%d' % self.transport.get_extra_info('socket').getsockname()
+        self.logger.info('Starting DHCP service')
         print('=' * 30)
         print(
             f'DHCP listening on {name}. interface: {self.config.bind_interface}'
@@ -109,6 +109,7 @@ class DHCPServer(BaseService):
         print(f'DNS: {",".join([str(dns) for dns in self.config.dns_ips])}')
         print(f'DHCP Lease time: {self.config.lease_time_second} seconds')
         print('=' * 30)
+        self.cleanup_task = asyncio.create_task(self.cleanup_leases())
 
     async def cleanup_leases(self) -> None:
         while True:

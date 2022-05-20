@@ -34,14 +34,16 @@ class DHCPServer(BaseService):
 
     def get_usable_ip(self) -> Optional[IPv4Address]:
         leased_ips = [int(lease.ip) for lease in self._dhcp_leases]
+        if self.is_debug:
+            self.logger.debug(f'leased ips: {leased_ips}')
         for ip in self.config.server_network.hosts():
             if self.is_debug:
                 self.logger.debug(f'Checking IP {IPv4Address(ip)}')
 
-            if ip in self.reserved_ips:
+            if int(ip) in self.reserved_ips:
                 continue
-            if ip not in leased_ips:
-                return IPv4Address(ip)
+            if int(ip) not in leased_ips:
+                return ip
 
         return None
 
@@ -99,16 +101,18 @@ class DHCPServer(BaseService):
 
         name = '%s:%d' % self.transport.get_extra_info('socket').getsockname()
         self.logger.info('Starting DHCP service')
-        print('=' * 30)
-        print(
+        self.logger.info(
             f'DHCP listening on {name}. interface: {self.config.bind_interface}'
         )
-        print(f'Router (Gateway): {self.config.server_router}')
-        print(f'Subnet: {self.config.server_network.netmask}')
-        print(f'Max clients: {self.config.server_network.num_addresses}')
-        print(f'DNS: {",".join([str(dns) for dns in self.config.dns_ips])}')
-        print(f'DHCP Lease time: {self.config.lease_time_second} seconds')
-        print('=' * 30)
+        self.logger.info(f'Router (Gateway): {self.config.server_router}')
+        self.logger.info(f'Subnet: {self.config.server_network.netmask}')
+        self.logger.info(
+            f'Max clients: {self.config.server_network.num_addresses - 3}')
+        self.logger.info(
+            f'DNS: {",".join([str(dns) for dns in self.config.dns_ips])}')
+        self.logger.info(
+            f'DHCP Lease time: {self.config.lease_time_second} seconds')
+
         self.cleanup_task = asyncio.create_task(self.cleanup_leases())
 
     async def cleanup_leases(self) -> None:

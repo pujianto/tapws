@@ -45,14 +45,15 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                 self.logger.debug(f'Incoming packet: {repr(packet)}')
 
             if packet.request_type:
-                self._response_map.get(packet.request_type,
-                                       lambda packet: None)(packet)
+                cmd = self._response_map.get(packet.request_type, None)
+                if cmd:
+                    asyncio.create_task(cmd(packet))
 
         except Exception as e:
             self.logger.warning(f'Error parsing packet: {e}')
             return
 
-    def send_offer(self, packet: DHCPPacket) -> None:
+    async def send_offer(self, packet: DHCPPacket) -> None:
 
         try:
             lease = self._srv.create_lease(packet.chaddr)
@@ -73,14 +74,14 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
             return
         self.broadcast(response)
 
-    def release_lease(self, packet: DHCPPacket) -> None:
+    async def release_lease(self, packet: DHCPPacket) -> None:
         lease = self._srv.get_lease_by_mac(packet.chaddr)
         if self.is_debug:
             self.logger.debug(f'Release for lease:{lease} requested')
         if lease is not None:
             self._srv.remove_lease(lease)
 
-    def send_ack(self, packet: DHCPPacket) -> None:
+    async def send_ack(self, packet: DHCPPacket) -> None:
         try:
             if packet.ciaddr > 0:
                 requested_ip = IPv4Address(packet.ciaddr)
@@ -92,13 +93,13 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                     if self.is_debug:
                         self.logger.debug(
                             f'no lease found for {packet.chaddr}. sending NAK')
-                    return self.send_nak(packet)
+                    return await self.send_nak(packet)
                 if lease.ip != packet.ciaddr:
                     if self.is_debug:
                         self.logger.debug(
                             f'lease IP mismatch: {lease.ip} != {packet.ciaddr}. sending NAK'
                         )
-                    return self.send_nak(packet)
+                    return await self.send_nak(packet)
 
                 self._srv.renew_lease(lease)
 
@@ -107,7 +108,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                 if req_ip is None:
                     if self.is_debug:
                         self.logger.debug(f'No requested IP. Sending NAK')
-                    return self.send_nak(packet)
+                    return await self.send_nak(packet)
 
                 requested_ip = IPv4Address(req_ip)
                 if self.is_debug:
@@ -118,7 +119,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                         self.logger.info(
                             f'Requested IP {requested_ip} is not available. sending NAK'
                         )
-                    return self.send_nak(packet)
+                    return await self.send_nak(packet)
                 lease = self._srv.create_lease(packet.chaddr, requested_ip)
                 self._srv.add_lease(lease)
 
@@ -136,12 +137,12 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         except IPv4UnavailableError as e:
             if self.is_debug:
                 self.logger.info(f'requested IP is unavailable: {e}')
-            self.send_nak(packet)
+            await self.send_nak(packet)
         except Exception as e:
             self.logger.error(f'(ack) DHCP server error {e}')
             return
 
-    def send_nak(self, packet: DHCPPacket) -> None:
+    async def send_nak(self, packet: DHCPPacket) -> None:
 
         response = DHCPPacket.Nak(mac=packet.chaddr, xid=packet.xid)
         self.broadcast(response)

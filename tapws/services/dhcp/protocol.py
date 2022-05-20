@@ -165,9 +165,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         """
 
         server_id = packet.get_option_value(dhcp.DHCP_OPT_SERVER_ID)
-        if server_id is None:
-            return True
-        if server_id != self._srv.config.server_ip.packed:
+        if server_id and server_id != self._srv.config.server_ip.packed:
             if self.is_debug:
                 self.logger.debug(
                     f'Server ID missmatch with server IP. Probably it is not for us.'

@@ -101,7 +101,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                         )
                     return self.send_nak(packet)
 
-                lease.renew(self._srv.config.lease_time_second)
+                self._srv.renew_lease(lease)
 
             else:
                 req_ip = packet.get_option_value(dhcp.DHCP_OPT_REQ_IP)
@@ -121,6 +121,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                         )
                     return self.send_nak(packet)
                 lease = self._srv.create_lease(packet.chaddr, requested_ip)
+                self._srv.add_lease(lease)
 
             response = DHCPPacket.Ack(
                 ip=requested_ip,
@@ -131,7 +132,6 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                 lease_time=self._srv.config.lease_time_second,
                 dns_ips=self._srv.config.dns_ips)
 
-            self._srv.add_lease(lease)
             self.broadcast(response)
 
         except IPv4UnavailableError as e:

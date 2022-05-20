@@ -76,7 +76,7 @@ class ServerConfig:
         interface_network = IPv4Network(f'{interface_ip}/{interface_subnet}',
                                         strict=False)
 
-        enable_dhcp = os.environ.get('ENABLE_DHCP',
+        enable_dhcp = os.environ.get('WITH_DHCP',
                                      'True').lower() in ('true', '1', 'yes')
         dhcp_lease_time = int(os.environ.get('DHCP_LEASE_TIME', '3600'))
         dns_ips = [IPv4Address('1.1.1.1'), IPv4Address('8.8.8.8')]

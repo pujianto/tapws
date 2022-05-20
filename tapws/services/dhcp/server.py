@@ -70,6 +70,11 @@ class DHCPServer(BaseService):
                 return lease
         return None
 
+    def renew_lease(self, lease: Lease) -> None:
+        lease.renew(self.config.lease_time_second)
+        self._dhcp_leases.add(lease)
+        self.logger.info(f'lease {lease} renewed')
+
     def remove_lease(self, lease: Lease) -> None:
         self._dhcp_leases.remove(lease)
         self.logger.info(f'lease {lease} removed')

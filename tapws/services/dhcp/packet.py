@@ -91,13 +91,14 @@ class DHCPPacket(dhcp.DHCP):
     def _build_options(message_type: bytes, lease_time: int,
                        dns_ips: List[IPv4Address], router_ip: IPv4Address,
                        netmask: IPv4Address) -> list:
-        renew_time = int(lease_time / 2)
-        rebind_time = int(renew_time + lease_time)
+        renew_time = int(lease_time * 0.5)
+        rebind_time = int(lease_time * 0.875)
 
         options = [
             (dhcp.DHCP_OPT_MSGTYPE, message_type),
             (dhcp.DHCP_OPT_NETMASK, netmask.packed),
             (dhcp.DHCP_OPT_ROUTER, router_ip.packed),
+            (dhcp.DHCP_OPT_RENEWTIME, DHCPPacket.seconds_to_bytes(renew_time)),
             (dhcp.DHCP_OPT_REBINDTIME,
              DHCPPacket.seconds_to_bytes(rebind_time)),
             (dhcp.DHCP_OPT_LEASE_SEC, DHCPPacket.seconds_to_bytes(lease_time)),

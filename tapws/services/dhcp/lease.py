@@ -25,8 +25,8 @@ class Lease:
 
     @property
     def expired(self) -> bool:
-        return self.leased_at + timedelta(
-            seconds=self.lease_time) < datetime.now()
+        rebind_time = int(self.lease_time * 0.875)
+        return self.leased_at + timedelta(seconds=rebind_time) < datetime.now()
 
     def renew(self, lease_time_second: int) -> None:
         self.leased_at = datetime.now()

@@ -25,7 +25,9 @@ class DHCPServer(BaseService):
         self.loop = asyncio.get_running_loop()
         self.reserved_ips = [
             int(self.config.server_ip),
-            int(self.config.server_router)
+            int(self.config.server_router),
+            int(self.config.server_network.network_address),
+            int(self.config.server_network.broadcast_address),
         ]
 
         logger = logging.getLogger('tapws.dhcp')
@@ -37,6 +39,7 @@ class DHCPServer(BaseService):
         if self.is_debug:
             self.logger.debug(f'leased ips: {leased_ips}')
         for ip in self.config.server_network.hosts():
+
             if self.is_debug:
                 self.logger.debug(f'Checking IP {IPv4Address(ip)}')
 

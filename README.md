@@ -49,7 +49,9 @@ It has built-in DHCP server (enabled by default).
 - `PUBLIC_INTERFACE`: set the public interface name, default is `eth0` (on Dockerfile), `None` on the Python side. If `PUBLIC_INTERFACE` is `None`, the emulator can't access the internet.
 - `INTERFACE_SUBNET`: set the tap interface subnet, default is `24`. Valid value `0` to `31`.
 - `DHCP_LEASE_TIME`: set the dhcp lease time, default is `3600` (1 hour).
-**Note:** If you want to run in `wss://` protocol locally, consider to use [mkcert](https://github.com/FiloSottile/mkcert) instead of standard self-signed certificate.
+
+
+**Note:** If you want to run in `wss://` mode locally, consider to use [mkcert](https://github.com/FiloSottile/mkcert) instead of standard self-signed certificate.
 
 ### References
 

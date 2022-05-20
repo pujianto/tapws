@@ -54,17 +54,17 @@ class DHCPServer(BaseService):
                 return ip
         raise IPv4UnavailableError(f'DHCP server is full')
 
-    def is_ip_available(self, ip: IPv4Address) -> bool:
+    def is_ip_available(self,
+                        ip: IPv4Address,
+                        mac: Optional[bytes] = None) -> bool:
         if int(ip) in self.reserved_ips:
             return False
 
-        if len(self._dhcp_leases) < 1:
-            return True
-
         for lease in self._dhcp_leases:
             if int(ip) == int(lease.ip):
+                if mac == lease.mac:
+                    return True
                 return False
-
         return True
 
     def add_lease(self, lease: Lease) -> None:
@@ -91,13 +91,6 @@ class DHCPServer(BaseService):
         await self.stop()
         await self.start()
         self.logger.info('DHCP service restarted')
-
-    def create_lease(self,
-                     mac: bytes,
-                     ip: Optional[IPv4Address] = None) -> Lease:
-
-        ip = ip or self.get_usable_ip()
-        return Lease(mac, int(ip), self.config.lease_time_second)
 
     async def start(self) -> None:
 

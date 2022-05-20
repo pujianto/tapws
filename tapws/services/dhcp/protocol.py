@@ -7,6 +7,10 @@ from asyncio.transports import DatagramTransport
 from ipaddress import IPv4Address
 from typing import TYPE_CHECKING
 
+import macaddress
+
+from .lease import Lease
+
 if TYPE_CHECKING:
     from .server import DHCPServer
 
@@ -44,8 +48,11 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
     def datagram_received(self, data: bytes, addr: tuple) -> None:
         try:
             packet = DHCPPacket(data)
+            mac = macaddress.parse(packet.chaddr, macaddress.OUI,
+                                   macaddress.MAC)
             if self.is_debug:
-                self.logger.debug(f'Incoming packet: {repr(packet)}')
+                self.logger.debug(
+                    f'Incoming packet: {repr(packet)}. Mac: {mac}')
 
             if packet.request_type:
                 cmd = self._response_map.get(packet.request_type, None)
@@ -53,7 +60,9 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                     asyncio.create_task(cmd(packet))
         except DpktError as e:
             self.logger.info(f'Invalid packet received: {e}')
-
+        except ValueError as e:
+            self.logger.info(f'invalid mac format {e}')
+            return
         except Exception as e:
             self.logger.warning(f'Error parsing packet: {e}')
             return
@@ -61,9 +70,14 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
     async def send_offer(self, packet: DHCPPacket) -> None:
 
         try:
-            lease = self._srv.create_lease(packet.chaddr)
+            selected_ip = self._srv.get_usable_ip()
+            temp_lease = Lease(
+                mac=packet.chaddr,
+                ip=int(selected_ip),
+                lease_time_second=self._srv.config.lease_time_second)
+
             response = DHCPPacket.Offer(
-                ip=IPv4Address(lease.ip),
+                ip=IPv4Address(temp_lease.ip),
                 router_ip=self._srv.config.server_router,
                 netmask_ip=self._srv.config.server_network.netmask,
                 mac=packet.chaddr,
@@ -131,7 +145,17 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
             if lease:
                 self._srv.renew_lease(lease)
             else:
-                lease = self._srv.create_lease(packet.chaddr, client_ip)
+                # ensure ip is available
+                if self._srv.is_ip_available(client_ip,
+                                             mac=packet.chaddr) == False:
+                    raise IPv4UnavailableError(
+                        f'IP {client_ip} is already in use by another client')
+
+                lease = Lease(
+                    mac=packet.chaddr,
+                    ip=int(client_ip),
+                    lease_time_second=self._srv.config.lease_time_second)
+
                 self._srv.add_lease(lease)
 
             response = DHCPPacket.Ack(

@@ -69,6 +69,9 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         except IPv4UnavailableError as e:
             self.logger.warning(f'No more IP addresses available: {e}')
             response = DHCPPacket.Nak(mac=packet.chaddr, xid=packet.xid)
+        except ValueError as e:
+            self.logger.warning(f'Invalid IP address: {e}')
+            return
         except Exception as e:
             self.logger.error(f'(offer) DHCP server error {e}')
             return
@@ -93,13 +96,14 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                     if self.is_debug:
                         self.logger.debug(
                             f'no lease found for {packet.chaddr}. sending NAK')
-                    return await self.send_nak(packet)
+                    raise ValueError(f'No lease found for {packet.chaddr}')
                 if lease.ip != packet.ciaddr:
                     if self.is_debug:
                         self.logger.debug(
                             f'lease IP mismatch: {lease.ip} != {packet.ciaddr}. sending NAK'
                         )
-                    return await self.send_nak(packet)
+                    raise ValueError(
+                        f'lease IP mismatch: {lease.ip} != {packet.ciaddr}')
 
                 self._srv.renew_lease(lease)
 
@@ -108,7 +112,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                 if req_ip is None:
                     if self.is_debug:
                         self.logger.debug(f'No requested IP. Sending NAK')
-                    return await self.send_nak(packet)
+                    raise ValueError(f'No requested IP')
 
                 requested_ip = IPv4Address(req_ip)
                 if self.is_debug:
@@ -119,7 +123,8 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                         self.logger.info(
                             f'Requested IP {requested_ip} is not available. sending NAK'
                         )
-                    return await self.send_nak(packet)
+                    raise ValueError(
+                        f'Requested IP {requested_ip} is not available')
                 lease = self._srv.create_lease(packet.chaddr, requested_ip)
                 self._srv.add_lease(lease)
 
@@ -137,6 +142,10 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         except IPv4UnavailableError as e:
             if self.is_debug:
                 self.logger.info(f'requested IP is unavailable: {e}')
+            await self.send_nak(packet)
+        except ValueError as e:
+            if self.is_debug:
+                self.logger.debug(f'Value error: {e}')
             await self.send_nak(packet)
         except Exception as e:
             self.logger.error(f'(ack) DHCP server error {e}')

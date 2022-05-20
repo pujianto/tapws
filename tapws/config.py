@@ -67,11 +67,18 @@ class ServerConfig:
         interface_ip = IPv4Address(os.environ.get('INTERFACE_IP'))
         interface_name = 'tapx'
         interface_subnet = int(os.environ.get('INTERFACE_SUBNET', '24'))
+
+        if interface_subnet > 31 or interface_subnet < 0:
+            raise ValueError(
+                'INTERFACE_SUBNET must be between 0 and 31, defaults set to 24'
+            )
+
         interface_network = IPv4Network(f'{interface_ip}/{interface_subnet}',
                                         strict=False)
 
         enable_dhcp = os.environ.get('ENABLE_DHCP',
                                      'True').lower() in ('true', '1', 'yes')
+        dhcp_lease_time = int(os.environ.get('DHCP_LEASE_TIME', '3600'))
         dns_ips = [IPv4Address('1.1.1.1'), IPv4Address('8.8.8.8')]
 
         return cls(host=host,
@@ -82,5 +89,6 @@ class ServerConfig:
                    intra_network=interface_network,
                    router_ip=interface_ip,
                    enable_dhcp=enable_dhcp,
+                   dhcp_lease_time=dhcp_lease_time,
                    ssl=ssl_context,
                    dns_ips=dns_ips)

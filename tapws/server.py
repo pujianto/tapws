@@ -14,11 +14,10 @@ from websockets import exceptions as websockets_exceptions
 from websockets.server import WebSocketServerProtocol
 from websockets.server import serve as websockets_serve
 
-from tapws.services.dhcp.config import DHCPConfig
-from tapws.services.dhcp.server import DHCPServer
-from tapws.services.netfilter.netfilter import Netfilter
-
 from .config import ServerConfig
+from .services.dhcp.config import DHCPConfig
+from .services.dhcp.server import DHCPServer
+from .services.netfilter.netfilter import Netfilter
 from .utils import format_mac
 
 
@@ -78,13 +77,13 @@ class Server:
         self.broadcast_addr = 'ff:ff:ff:ff:ff:ff'
         self.whitelist_macs = ('33:33:', '01:00:5e:', '00:52:02:')
 
-        logger = logging.getLogger('tapws')
+        logger = logging.getLogger('tapws.main')
         self.is_debug = logger.isEnabledFor(logging.DEBUG)
         self.logger = logger
 
     def broadcast(self) -> None:
         message = self.tap.read(1024 * 4)
-        dst_mac = format_mac(message[:6])
+        dst_mac = format_mac(message[:6])  # type: ignore
 
         for connection in self._connections.copy():
             try:
@@ -111,7 +110,8 @@ class Server:
         self._connections.add(connection)
         try:
             async for message in websocket:
-                mac = format_mac(message[6:12])
+
+                mac = format_mac(message[6:12])  # type: ignore
                 if self.is_debug:
                     self.logger.info(
                         f'incoming from {mac} | hwaddr: {self.hw_addr}')
@@ -142,13 +142,12 @@ class Server:
                               ssl=self.config.ssl)
 
         self.ws_server = await ws
-        if self.config.enable_dhcp:
-            await self.dhcp_svc.start()
-        if self.config.public_interface:
-            await self.netfilter_svc.start()
-
         self.logger.info(
             f'Service running on {self.config.host}:{self.config.port}')
+        if self.config.public_interface:
+            await self.netfilter_svc.start()
+        if self.config.enable_dhcp:
+            await self.dhcp_svc.start()
 
         await self.ws_server.wait_closed()
 

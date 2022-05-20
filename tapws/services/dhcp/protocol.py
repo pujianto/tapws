@@ -5,8 +5,11 @@ import asyncio
 import logging
 from asyncio.transports import DatagramTransport
 from ipaddress import IPv4Address
+from struct import pack
+from typing import TYPE_CHECKING
 
-from tapws.services.dhcp.server import DHCPServer
+if TYPE_CHECKING:
+    from .server import DHCPServer
 
 from .packet import DHCPPacket, IPv4UnavailableError, dhcp
 
@@ -16,38 +19,41 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
     broadcast_ip = '255.255.255.255'
     broadcast_port = 68
 
-    def __init__(self, server: DHCPServer) -> None:
+    def __init__(self, server: 'DHCPServer') -> None:
         self._srv = server
         self._response_map = {
             dhcp.DHCPDISCOVER: self.send_offer,
             dhcp.DHCPREQUEST: self.send_ack,
+            dhcp.DHCPRELEASE: self.release_lease,
         }
         logger = logging.getLogger('tapws.dhcp')
         self.is_debug = logger.isEnabledFor(logging.DEBUG)
         self.logger = logger
 
-    def broadcast(self, data: bytes) -> None:
+    def broadcast(self, packet: DHCPPacket) -> None:
         if self.is_debug:
-            self.logger.debug(f'Broadcasting: {repr(data)}')
-        self.transport.sendto(data, (self.broadcast_ip, self.broadcast_port))
+            self.logger.debug(f'Broadcasting: {repr(packet)}')
+        self.transport.sendto(bytes(packet),
+                              (self.broadcast_ip, self.broadcast_port))
 
     def connection_made(self, transport: DatagramTransport) -> None:
         self.transport = transport
 
     def datagram_received(self, data: bytes, addr: tuple) -> None:
         try:
-            packet = DHCPPacket.unpack(data)
+            packet = DHCPPacket(data)
             if self.is_debug:
                 self.logger.debug(f'Incoming packet: {repr(packet)}')
-                self.logger.debug(f'request_type: {packet.request_type}')
 
-            self._response_map.get(packet.request_type,
-                                   lambda packet: None)(packet)
+            if packet.request_type:
+                self._response_map.get(packet.request_type,
+                                       lambda packet: None)(packet)
 
         except Exception as e:
             self.logger.warning(f'Error parsing packet: {e}')
+            raise e
 
-    def send_offer(self, packet: dhcp.DHCP) -> None:
+    def send_offer(self, packet: DHCPPacket) -> None:
 
         try:
             lease = self._srv.create_lease(packet.chaddr)
@@ -62,29 +68,59 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
 
         except IPv4UnavailableError as e:
             self.logger.warning(f'No more IP addresses available: {e}')
-            response = DHCPPacket.Decline(mac=packet.chaddr)
+            response = DHCPPacket.Nak(mac=packet.chaddr, xid=packet.xid)
         except Exception as e:
-            self.logger.error(f'DHCP server error {e}')
-            return None
-        self.broadcast(bytes(response))
+            self.logger.error(f'(offer) DHCP server error {e}')
+            raise e
+        self.broadcast(response)
+
+    def release_lease(self, packet: DHCPPacket) -> None:
+        lease = self._srv.get_lease_by_mac(packet.chaddr)
+        if self.is_debug:
+            self.logger.debug(f'Release for lease:{lease} requested')
+        if lease is not None:
+            self._srv.remove_lease(lease)
 
     def send_ack(self, packet: DHCPPacket) -> None:
         try:
-            req_ip = packet.get_option_value(dhcp.DHCP_OPT_REQ_IP)
-            if req_ip is None:
-                return self.send_nak(packet)
+            if packet.ciaddr > 0:
+                requested_ip = IPv4Address(packet.ciaddr)
+                if self.is_debug:
+                    self.logger.debug(
+                        f'renew lease request for {requested_ip}')
+                lease = self._srv.get_lease_by_mac(packet.chaddr)
+                if lease is None:
+                    if self.is_debug:
+                        self.logger.debug(
+                            f'no lease found for {packet.chaddr}. sending NAK')
+                    return self.send_nak(packet)
+                if lease.ip != packet.ciaddr:
+                    if self.is_debug:
+                        self.logger.debug(
+                            f'lease IP mismatch: {lease.ip} != {packet.ciaddr}. sending NAK'
+                        )
+                    return self.send_nak(packet)
 
-            requested_ip = IPv4Address(req_ip)
-            if self.is_debug:
-                self.logger.debug(f'Requested IP: {requested_ip}')
+                lease.renew(self._srv.config.lease_time_second)
 
-            if not self._srv.is_ip_available(requested_ip):
-                self.logger.info(
-                    f'Requested IP {requested_ip} is not available. sending NAK'
-                )
-                return self.send_nak(packet)
+            else:
+                req_ip = packet.get_option_value(dhcp.DHCP_OPT_REQ_IP)
+                if req_ip is None:
+                    if self.is_debug:
+                        self.logger.debug(f'No requested IP. Sending NAK')
+                    return self.send_nak(packet)
 
-            lease = self._srv.create_lease(packet.chaddr, requested_ip)
+                requested_ip = IPv4Address(req_ip)
+                if self.is_debug:
+                    self.logger.debug(f'new IP request: {requested_ip}')
+
+                if self._srv.is_ip_available(requested_ip) is False:
+                    if self.is_debug:
+                        self.logger.info(
+                            f'Requested IP {requested_ip} is not available. sending NAK'
+                        )
+                    return self.send_nak(packet)
+                lease = self._srv.create_lease(packet.chaddr, requested_ip)
 
             response = DHCPPacket.Ack(
                 ip=requested_ip,
@@ -96,21 +132,18 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                 dns_ips=self._srv.config.dns_ips)
 
             self._srv.add_lease(lease)
-            self.broadcast(bytes(response))
+            self.broadcast(response)
 
         except IPv4UnavailableError as e:
-            self.logger.warning(f'requested IP is unavailable: {e}')
+            if self.is_debug:
+                self.logger.info(f'requested IP is unavailable: {e}')
             self.send_nak(packet)
         except Exception as e:
-            self.logger.error(f'DHCP server error {e}')
-            return None
+            self.logger.error(f'(ack) DHCP server error {e}')
+            raise e
 
-    def send_nak(self, packet: dhcp.DHCP) -> None:
-        response = dhcp.DHCP()
-        response.chaddr = packet.chaddr
-        response.op = dhcp.DHCP_OP_REPLY
-        response.xid = packet.xid
-        response.opts = []
-        response.opts.append(
-            (dhcp.DHCP_OPT_MSGTYPE, bytes(chr(dhcp.DHCPNAK), 'ascii')))
-        self.broadcast(bytes(response))
+    def send_nak(self, packet: DHCPPacket) -> None:
+
+        response = DHCPPacket.Nak(mac=packet.chaddr, xid=packet.xid)
+
+        self.broadcast(response)

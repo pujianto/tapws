@@ -45,8 +45,8 @@ It has built-in DHCP server (enabled by default).
 
 
 - `WITH_DHCP`: set to `true` to enable dhcp, default is `true`
-- `INTERFACE_IP`: set the tap interface ip, default is `10.11.12.254` (on Dockerfile), `None` on the Python side (it will throw an error if not set).
-- `PUBLIC_INTERFACE`: set the public interface name, default is `eth0` (on Dockerfile), `None` on the Python side. If `PUBLIC_INTERFACE` is `None`, the emulator can't access the internet.
+- `INTERFACE_IP`: set the tap interface ip, default is `10.11.12.254`.
+- `PUBLIC_INTERFACE`: set the public interface name,default is `None`. Dockerfile default is`eth0`. If `PUBLIC_INTERFACE` is `None`, the emulator can't access the internet (NAT not enabled).
 - `INTERFACE_SUBNET`: set the tap interface subnet, default is `24`. Valid value `0` to `31`.
 - `DHCP_LEASE_TIME`: set the dhcp lease time, default is `3600` (1 hour).
 

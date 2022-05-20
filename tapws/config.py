@@ -64,7 +64,8 @@ class ServerConfig:
 
         # Specify the (public) network interface name you want to 'share' with tap devices
         public_interface = os.environ.get('PUBLIC_INTERFACE', None)
-        interface_ip = IPv4Address(os.environ.get('INTERFACE_IP'))
+        interface_ip = IPv4Address(
+            os.environ.get('INTERFACE_IP', '10.11.12.254'))
         interface_name = 'tapx'
         interface_subnet = int(os.environ.get('INTERFACE_SUBNET', '24'))
 

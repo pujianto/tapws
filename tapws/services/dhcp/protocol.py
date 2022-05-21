@@ -88,11 +88,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
 
         try:
             selected_ip = await self.server.get_usable_ip()
-            temp_lease = Lease(mac=packet.chaddr,
-                               ip=int(selected_ip),
-                               lease_time=self.server.config.lease_time)
-
-            response = DHCPPacket.Offer(ip=IPv4Address(temp_lease.ip),
+            response = DHCPPacket.Offer(ip=selected_ip,
                                         mac=packet.chaddr,
                                         secs=packet.secs,
                                         xid=packet.xid,

@@ -7,8 +7,7 @@ from asyncio.transports import DatagramTransport
 from ipaddress import IPv4Address
 from typing import TYPE_CHECKING
 
-import macaddress
-
+from ...utils import format_mac
 from .lease import Lease
 
 if TYPE_CHECKING:
@@ -56,8 +55,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                         f'Unknown request type: {packet.request_type}')
                 return
 
-            mac = macaddress.parse(packet.chaddr, macaddress.OUI,
-                                   macaddress.MAC)
+            mac = format_mac(packet.chaddr)
             if self.is_debug:
                 self.logger.debug(
                     f'Incoming packet: {repr(packet)}. Mac: {mac}')

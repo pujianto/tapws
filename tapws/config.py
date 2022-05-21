@@ -80,6 +80,8 @@ class ServerConfig:
         enable_dhcp = os.environ.get('WITH_DHCP',
                                      'True').lower() in ('true', '1', 'yes')
         dhcp_lease_time = int(os.environ.get('DHCP_LEASE_TIME', '3600'))
+        if dhcp_lease_time < -1:
+            raise ValueError('DHCP_LEASE_TIME must be -1 or greater')
         dns_ips = [IPv4Address('1.1.1.1'), IPv4Address('8.8.8.8')]
 
         return cls(host=host,

@@ -27,7 +27,7 @@ class DHCPPacket(dhcp.DHCP):
 
     @staticmethod
     def seconds_to_bytes(seconds: int) -> bytes:
-        return seconds.to_bytes(4, byteorder='big')
+        return seconds.to_bytes(4, byteorder='big', signed=True)
 
     @classmethod
     def Offer(cls,
@@ -93,8 +93,11 @@ class DHCPPacket(dhcp.DHCP):
     def _build_options(message_type: bytes, lease_time: int,
                        dns_ips: List[IPv4Address], router_ip: IPv4Address,
                        netmask: IPv4Address) -> list:
-        renew_time = int(lease_time * 0.5)
-        rebind_time = int(lease_time * 0.875)
+        if lease_time != -1:
+            renew_time = int(lease_time * 0.5)
+            rebind_time = int(lease_time * 0.875)
+        else:
+            renew_time = rebind_time = -1
 
         options = [
             (dhcp.DHCP_OPT_MSGTYPE, message_type),

@@ -8,6 +8,8 @@ from websockets.legacy.server import WebSocketServerProtocol
 
 class Connection:
 
+    __slots__ = ('_mac', 'websocket')
+
     def __init__(self,
                  websocket: WebSocketServerProtocol,
                  mac: Optional[str] = None) -> None:

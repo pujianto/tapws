@@ -9,6 +9,8 @@ from ...utils import format_mac
 
 class Lease:
 
+    __slots__ = ('mac', 'ip', 'lease_time', 'leased_at')
+
     def __init__(
         self,
         mac: bytes,
@@ -25,6 +27,8 @@ class Lease:
 
     @property
     def expired(self) -> bool:
+        if self.lease_time == -1:
+            return False
         return self.leased_at + timedelta(
             seconds=self.lease_time) < datetime.now()
 

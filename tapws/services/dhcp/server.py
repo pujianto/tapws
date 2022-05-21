@@ -17,6 +17,19 @@ from .protocol import DHCPServerProtocol
 
 class DHCPServer(BaseService):
 
+    __slots__ = (
+        '_dhcp_leases',
+        'config',
+        'loop',
+        'leases_cleanup_timer',
+        'reserved_ips',
+        'is_debug',
+        'logger',
+        'transport',
+        'protocol',
+        'cleanup_task',
+    )
+
     def __init__(self, config: DHCPConfig) -> None:
 
         self._dhcp_leases = set()

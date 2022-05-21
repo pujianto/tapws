@@ -36,7 +36,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         self.is_debug = logger.isEnabledFor(logging.DEBUG)
         self.logger = logger
 
-    def broadcast(self, packet: DHCPPacket) -> None:
+    async def broadcast(self, packet: DHCPPacket) -> None:
         if self.is_debug:
             self.logger.debug(f'Broadcasting: {repr(packet)}')
         self.transport.sendto(bytes(packet),
@@ -97,7 +97,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         except Exception as e:
             self.logger.error(f'(offer) DHCP server error {e}')
             return
-        self.broadcast(response)
+        await self.broadcast(response)
 
     async def release_lease(self, packet: DHCPPacket) -> None:
         lease = self.server.get_lease_by_mac(packet.chaddr)
@@ -167,7 +167,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                                       xid=packet.xid,
                                       **self.server.config.dhcp_opts())
 
-            self.broadcast(response)
+            await self.broadcast(response)
 
         except IPv4UnavailableError as e:
             if self.is_debug:
@@ -199,4 +199,4 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
     async def send_nak(self, packet: DHCPPacket) -> None:
 
         response = DHCPPacket.Nak(mac=packet.chaddr, xid=packet.xid)
-        self.broadcast(response)
+        await self.broadcast(response)

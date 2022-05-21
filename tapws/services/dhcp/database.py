@@ -19,7 +19,7 @@ class Database:
         for lease in self.leases:
             if lease.mac == mac:
                 return lease
-        raise ValueError(f'lease not found for mac {format_mac(mac)}')
+        return None
 
     def expired_leases(self) -> Generator[Lease, None, None]:
         for lease in self.leases:

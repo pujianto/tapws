@@ -100,6 +100,8 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
 
         except IPv4UnavailableError as e:
             self.logger.warning(f'No more IP addresses available: {e}')
+            self.logger.info(
+                'Tips: increase the pool size (reduce the subnet size)')
             return
         except Exception as e:
             self.logger.error(f'(offer) DHCP server error {e}')

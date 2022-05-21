@@ -84,8 +84,7 @@ class Server:
 
     def broadcast(self) -> None:
         message = self.tap.read(1024 * 4)
-        dst_mac = format_mac(message[:6])  # type: ignore
-
+        dst_mac = format_mac(message[:6])
         for connection in list(self._connections):
             try:
                 if self.is_debug:

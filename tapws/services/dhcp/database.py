@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import logging
-from typing import Generator, List, Optional
+from typing import AsyncGenerator, Generator, List, Optional
 
 from .lease import Lease
 
@@ -23,7 +23,7 @@ class Database:
                 return lease
         return None
 
-    def expired_leases(self) -> Generator[Lease, None, None]:
+    async def expired_leases(self) -> AsyncGenerator[Lease, None]:
         for lease in self.leases:
             if lease.expired:
                 yield lease
@@ -41,7 +41,8 @@ class Database:
         if lease not in self.leases:
             self.logger.warning(f'Lease {lease} not found in database')
             return
-
+        if self.is_debug:
+            self.logger.debug(f'Removing lease {lease} from database')
         self.leases.remove(lease)
 
     def renew_lease(self, lease: Lease) -> None:

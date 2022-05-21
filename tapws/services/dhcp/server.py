@@ -128,7 +128,7 @@ class DHCPServer(BaseService):
             await asyncio.sleep(self.leases_cleanup_timer)
             if self.is_debug:
                 self.logger.debug('Cleaning up leases')
-            for lease in self.database.expired_leases():
+            async for lease in self.database.expired_leases():
                 self.database.remove_lease(lease)
 
     async def stop(self) -> None:

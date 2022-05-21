@@ -32,9 +32,10 @@ class Lease:
         return self.leased_at + timedelta(
             seconds=self.lease_time) < datetime.now()
 
-    def renew(self, lease_time: int) -> None:
+    def renew(self, lease_time: int) -> 'Lease':
         self.leased_at = datetime.now()
         self.lease_time = lease_time
+        return self
 
     def __repr__(self) -> str:
 

@@ -51,7 +51,8 @@ class DHCPServer(BaseService):
         self.is_debug = logger.isEnabledFor(logging.DEBUG)
         self.logger = logger
 
-    def get_usable_ip(self, excludes: List[IPv4Address] = []) -> IPv4Address:
+    async def get_usable_ip(self,
+                            excludes: List[IPv4Address] = []) -> IPv4Address:
 
         excludes_int = [int(ip) for ip in excludes]
         for ip in self.config.server_network.hosts():
@@ -64,9 +65,9 @@ class DHCPServer(BaseService):
                 return ip
         raise IPv4UnavailableError('DHCP server is full')
 
-    def is_ip_available(self,
-                        ip: IPv4Address,
-                        mac: Optional[bytes] = None) -> bool:
+    async def is_ip_available(self,
+                              ip: IPv4Address,
+                              mac: Optional[bytes] = None) -> bool:
         if int(ip) in self.reserved_ips:
             return False
         if mac is not None:
@@ -75,18 +76,18 @@ class DHCPServer(BaseService):
                 return True
         return self.database.is_ip_available(int(ip))
 
-    def add_lease(self, lease: Lease) -> None:
+    async def add_lease(self, lease: Lease) -> None:
         self.database.add_lease(lease)
         self.logger.info(f'new lease added: {lease}')
 
-    def get_lease_by_mac(self, mac: bytes) -> Optional[Lease]:
+    async def get_lease_by_mac(self, mac: bytes) -> Optional[Lease]:
         return self.database.get_lease(mac)
 
-    def renew_lease(self, lease: Lease) -> None:
+    async def renew_lease(self, lease: Lease) -> None:
         self.database.renew_lease(lease)
         self.logger.info(f'lease {lease} renewed')
 
-    def remove_lease(self, lease: Lease) -> None:
+    async def remove_lease(self, lease: Lease) -> None:
         self.database.remove_lease(lease)
         self.logger.info(f'lease {lease} removed')
 

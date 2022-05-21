@@ -87,7 +87,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
     async def send_offer(self, packet: DHCPPacket) -> None:
 
         try:
-            selected_ip = self.server.get_usable_ip()
+            selected_ip = await self.server.get_usable_ip()
             temp_lease = Lease(mac=packet.chaddr,
                                ip=int(selected_ip),
                                lease_time=self.server.config.lease_time)
@@ -107,11 +107,11 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         await self.broadcast(response)
 
     async def release_lease(self, packet: DHCPPacket) -> None:
-        lease = self.server.get_lease_by_mac(packet.chaddr)
+        lease = await self.server.get_lease_by_mac(packet.chaddr)
         if self.is_debug:
             self.logger.debug(f'Release for lease:{lease} requested')
         if lease is not None:
-            self.server.remove_lease(lease)
+            await self.server.remove_lease(lease)
 
     async def reinitialize_lease(self, packet: DHCPPacket) -> None:
         """
@@ -124,7 +124,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         if self.validate_server_id(packet) is False:
             return
 
-        lease = self.server.get_lease_by_mac(packet.chaddr)
+        lease = await self.server.get_lease_by_mac(packet.chaddr)
         if lease and lease.ip == packet.ciaddr:
             if self.is_debug:
                 self.logger.debug(f'Reinitialize lease for client: {lease}')
@@ -153,12 +153,12 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                 self.logger.debug(
                     f'Requested IP (OPT): {client_ip_int_or_byte}.')
 
-            lease = self.server.get_lease_by_mac(packet.chaddr)
+            lease = await self.server.get_lease_by_mac(packet.chaddr)
             if lease:
-                self.server.renew_lease(lease)
+                await self.server.renew_lease(lease)
             else:
                 # ensure ip is available
-                if self.server.is_ip_available(client_ip) == False:
+                if await self.server.is_ip_available(client_ip) == False:
                     raise IPv4UnavailableError(
                         f'IP {client_ip} is already in use by another client')
 
@@ -166,7 +166,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                               ip=int(client_ip),
                               lease_time=self.server.config.lease_time)
 
-                self.server.add_lease(lease)
+                await self.server.add_lease(lease)
 
             response = DHCPPacket.Ack(ip=client_ip,
                                       mac=packet.chaddr,

@@ -62,7 +62,7 @@ class Server:
                 server_network=self.config.intra_network,
                 server_router=self.config.router_ip,
                 dns_ips=self.config.dns_ips,
-                lease_time_second=self.config.dhcp_lease_time,
+                lease_time=self.config.dhcp_lease_time,
                 bind_interface=self.config.private_interface,
             )
             self.dhcp_svc = DHCPServer(dhcp_config)

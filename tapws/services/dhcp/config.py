@@ -13,7 +13,7 @@ class DHCPConfig:
         server_network: IPv4Network,
         server_router: IPv4Address,
         bind_interface: str,
-        lease_time_second: int = 3600,
+        lease_time: int = 3600,
         dns_ips: List[IPv4Address] = [IPv4Address('1.1.1.1')],
     ) -> None:
         self.server_ip = server_ip
@@ -21,4 +21,4 @@ class DHCPConfig:
         self.server_router = server_router
         self.dns_ips = dns_ips
         self.bind_interface = bind_interface
-        self.lease_time_second = lease_time_second
+        self.lease_time = lease_time

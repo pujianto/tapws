@@ -23,6 +23,15 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
     broadcast_ip = '255.255.255.255'
     broadcast_port = 68
 
+    __slots__ = (
+        'server',
+        '_response_map',
+        'allowed_requests',
+        'logger',
+        'is_debug',
+        'transport',
+    )
+
     def __init__(self, server: 'DHCPServer') -> None:
         self.server = server
         self._response_map = {
@@ -31,9 +40,10 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
             dhcp.DHCPRELEASE: self.release_lease,
             dhcp.DHCPDECLINE: self.reinitialize_lease,
         }
-        logger = logging.getLogger('tapws.dhcp')
-        self.is_debug = logger.isEnabledFor(logging.DEBUG)
-        self.logger = logger
+        self.allowed_requests = self._response_map.keys()
+
+        self.logger = logging.getLogger('tapws.dhcp.protocol')
+        self.is_debug = self.logger.isEnabledFor(logging.DEBUG)
 
     async def broadcast(self, packet: DHCPPacket) -> None:
         if self.is_debug:
@@ -45,11 +55,10 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         self.transport = transport
 
     def datagram_received(self, data: bytes, addr: tuple) -> None:
-        allowed_requests = self._response_map.keys()
 
         try:
             packet = DHCPPacket(data)
-            if packet.request_type not in allowed_requests:
+            if packet.request_type not in self.allowed_requests:
                 if self.is_debug:
                     self.logger.debug(
                         f'Unknown request type: {packet.request_type}')

@@ -4,10 +4,10 @@
 import asyncio
 import logging
 from asyncio.transports import DatagramTransport
+from functools import partial
 from ipaddress import IPv4Address
 from typing import TYPE_CHECKING
 
-from ...utils import format_mac
 from .lease import Lease
 
 if TYPE_CHECKING:
@@ -79,7 +79,12 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
             return
 
         cmd = self.response_map[packet.request_type](packet)
-        asyncio.create_task(cmd)
+        asyncio.create_task(cmd, name='broadcast').add_done_callback(
+            partial(self._on_send_done))
+
+    def _on_send_done(self, future: asyncio.Future) -> None:
+        if future.exception():
+            self.logger.warning(f'Error sending packet: {future.exception()}')
 
     async def send_offer(self, packet: DHCPPacket) -> None:
         try:

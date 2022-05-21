@@ -4,8 +4,9 @@
 import asyncio
 import logging
 from asyncio import create_task
+from asyncio.futures import Future
 from functools import partial
-from typing import Set
+from typing import Any, Generator, Set
 
 from pytun import IFF_NO_PI, IFF_TAP
 from pytun import Error as TunError
@@ -26,7 +27,8 @@ class Server:
 
     __slots__ = ('config', '_connections', 'is_debug', 'logger', 'tap', 'loop',
                  'hw_addr', 'broadcast_addr', 'whitelist_macs', 'dhcp_svc',
-                 'netfilter_svc', 'ws_server')
+                 'netfilter_svc', 'ws_server', '_waiter_')
+    _waiter_: Future[None]
 
     def __init__(
         self,
@@ -82,10 +84,15 @@ class Server:
         self.broadcast_addr = 'ff:ff:ff:ff:ff:ff'
         self.whitelist_macs = ('33:33:', '01:00:5e:', '00:52:02:')
 
+    def _on_send_done(self, future: Future) -> None:
+        if future.exception():
+            self.logger.warning(
+                f'Error sending message to client: {future.exception()}')
+
     def broadcast(self) -> None:
         message = self.tap.read(1024 * 4)
         dst_mac = format_mac(message[:6])
-        for connection in list(self._connections):
+        for connection in self._connections:
             try:
                 if self.is_debug:
                     self.logger.debug(
@@ -93,11 +100,16 @@ class Server:
                     )
 
                 if dst_mac in [self.broadcast_addr, connection.mac]:
-                    create_task(connection.websocket.send(message))
+                    create_task(connection.websocket.send(message),
+                                name='broadcast').add_done_callback(
+                                    partial(self._on_send_done))
                     continue
 
                 if dst_mac.startswith(self.whitelist_macs):
-                    create_task(connection.websocket.send(message))
+                    create_task(connection.websocket.send(message),
+                                name='broadcast').add_done_callback(
+                                    partial(self._on_send_done))
+
                     continue
 
             except Exception as e:
@@ -130,7 +142,7 @@ class Server:
         finally:
             self._connections.remove(connection)
 
-    async def start(self) -> None:
+    async def bootstrap(self) -> None:
         self.tap.up()
         self.logger.info('Starting service...')
 
@@ -145,16 +157,32 @@ class Server:
             await self.netfilter_svc.start()
         if self.config.enable_dhcp:
             await self.dhcp_svc.start()
+        self._waiter_ = self.loop.create_future()
 
-        await self.ws_server.wait_closed()
+    async def start(self) -> None:
+        await self.bootstrap()
+        return await asyncio.shield(self._waiter_)
 
     async def stop(self) -> None:
 
         self.logger.info('Stopping service...')
+        self.ws_server.close()
+
         if self.config.enable_dhcp:
             await self.dhcp_svc.stop()
         if self.config.public_interface:
             await self.netfilter_svc.stop()
 
-        self.ws_server.close()
+        await self.ws_server.wait_closed()
         self.tap.close()
+        self._waiter_.set_result(None)
+
+    async def __aenter__(self) -> 'Server':
+        await self.bootstrap()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        await self.stop()
+
+    def __await__(self) -> Generator[Any, None, None]:
+        return self.start().__await__()

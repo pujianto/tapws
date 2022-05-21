@@ -15,16 +15,14 @@ from tapws.config import ServerConfig
 
 async def main():
     loop = asyncio.get_running_loop()
-
-    server_config = ServerConfig.From_env()
-    server = Server(server_config)
-
+    waiter = loop.create_future()
     for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig,
-                                lambda: asyncio.create_task(server.stop()))
+        loop.add_signal_handler(sig, waiter.set_result, None)
 
     print('Starting service')
-    await server.start()
+    async with Server(ServerConfig.From_env()):
+        await waiter
+        print('Stopping service')
     print('Service Stopped')
 
 

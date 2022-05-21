@@ -4,9 +4,10 @@
 import asyncio
 import logging
 import socket
+from asyncio.futures import Future
 from functools import partial
 from ipaddress import IPv4Address
-from typing import Optional
+from typing import Any, Generator, Optional
 
 from ..base import BaseService
 from .config import DHCPConfig
@@ -28,7 +29,9 @@ class DHCPServer(BaseService):
         'transport',
         'cleanup_task',
         'database',
+        '_waiter_',
     )
+    _waiter_: Future[None]
 
     def __init__(self, config: DHCPConfig) -> None:
 
@@ -123,6 +126,11 @@ class DHCPServer(BaseService):
         self.cleanup_task = asyncio.create_task(self.cleanup_leases())
         self.cleanup_task.add_done_callback(
             lambda _: self.logger.info('Lease cleaner service stopped'))
+        self._waiter_ = self.loop.create_future()
+
+    async def _blocking(self) -> None:
+        await self.start()
+        return await asyncio.shield(self._waiter_)
 
     async def cleanup_leases(self) -> None:
         while True:
@@ -137,3 +145,14 @@ class DHCPServer(BaseService):
         self.cleanup_task.cancel()
         self.transport.close()
         self.logger.info('DHCP service stopped')
+        self._waiter_.set_result(None)
+
+    async def __aenter__(self) -> 'DHCPServer':
+        await self.start()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+        await self.stop()
+
+    def __await__(self) -> Generator[Any, None, None]:
+        return self._blocking().__await__()

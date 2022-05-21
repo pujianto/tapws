@@ -142,7 +142,7 @@ class Server:
         finally:
             self._connections.remove(connection)
 
-    async def bootstrap(self) -> None:
+    async def start(self) -> None:
         self.tap.up()
         self.logger.info('Starting service...')
 
@@ -159,8 +159,8 @@ class Server:
             await self.dhcp_svc.start()
         self._waiter_ = self.loop.create_future()
 
-    async def start(self) -> None:
-        await self.bootstrap()
+    async def _blocking(self) -> None:
+        await self.start()
         return await asyncio.shield(self._waiter_)
 
     async def stop(self) -> None:
@@ -178,11 +178,11 @@ class Server:
         self._waiter_.set_result(None)
 
     async def __aenter__(self) -> 'Server':
-        await self.bootstrap()
+        await self.start()
         return self
 
     async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
         await self.stop()
 
     def __await__(self) -> Generator[Any, None, None]:
-        return self.start().__await__()
+        return self._blocking().__await__()

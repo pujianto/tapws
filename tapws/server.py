@@ -5,6 +5,7 @@ import asyncio
 import logging
 from asyncio import create_task
 from functools import partial
+from typing import Set
 
 from pytun import IFF_NO_PI, IFF_TAP
 from pytun import Error as TunError
@@ -23,12 +24,16 @@ from .utils import format_mac
 
 class Server:
 
+    __slots__ = ('config', '_connections', 'is_debug', 'logger', 'tap', 'loop',
+                 'hw_addr', 'broadcast_addr', 'whitelist_macs', 'dhcp_svc',
+                 'netfilter_svc', 'ws_server')
+
     def __init__(
         self,
         config: ServerConfig,
     ) -> None:
         self.config = config
-        self._connections = set()
+        self._connections: Set[Connection] = set()
         logger = logging.getLogger('tapws.main')
         self.is_debug = logger.isEnabledFor(logging.DEBUG)
         self.logger = logger
@@ -62,7 +67,7 @@ class Server:
                 server_network=self.config.intra_network,
                 server_router=self.config.router_ip,
                 dns_ips=self.config.dns_ips,
-                lease_time_second=self.config.dhcp_lease_time,
+                lease_time=self.config.dhcp_lease_time,
                 bind_interface=self.config.private_interface,
             )
             self.dhcp_svc = DHCPServer(dhcp_config)
@@ -79,8 +84,7 @@ class Server:
 
     def broadcast(self) -> None:
         message = self.tap.read(1024 * 4)
-        dst_mac = format_mac(message[:6])  # type: ignore
-
+        dst_mac = format_mac(message[:6])
         for connection in list(self._connections):
             try:
                 if self.is_debug:
@@ -131,13 +135,10 @@ class Server:
         self.logger.info('Starting service...')
 
         self.loop.add_reader(self.tap.fileno(), partial(self.broadcast))
-
-        ws = websockets_serve(self.websocket_handler,
-                              self.config.host,
-                              self.config.port,
-                              ssl=self.config.ssl)
-
-        self.ws_server = await ws
+        self.ws_server = await websockets_serve(self.websocket_handler,
+                                                self.config.host,
+                                                self.config.port,
+                                                ssl=self.config.ssl)
         self.logger.info(
             f'Service running on {self.config.host}:{self.config.port}')
         if self.config.public_interface:

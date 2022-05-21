@@ -10,6 +10,7 @@ from typing import List, Optional
 
 from ..base import BaseService
 from .config import DHCPConfig
+from .database import Database
 from .lease import Lease
 from .packet import IPv4UnavailableError
 from .protocol import DHCPServerProtocol
@@ -18,7 +19,6 @@ from .protocol import DHCPServerProtocol
 class DHCPServer(BaseService):
 
     __slots__ = (
-        '_dhcp_leases',
         'config',
         'loop',
         'leases_cleanup_timer',
@@ -28,20 +28,22 @@ class DHCPServer(BaseService):
         'transport',
         'protocol',
         'cleanup_task',
+        'database',
     )
 
     def __init__(self, config: DHCPConfig) -> None:
 
-        self._dhcp_leases = set()
-
         self.config = config
+        self.database = Database(self.config.lease_time)
+
         self.loop = asyncio.get_running_loop()
-        self.reserved_ips = [
+        self.reserved_ips = (
             int(self.config.server_ip),
             int(self.config.server_router),
             int(self.config.server_network.network_address),
             int(self.config.server_network.broadcast_address),
-        ]
+            *[int(ip) for ip in self.config.dns_ips],
+        )
 
         self.leases_cleanup_timer = 60
 
@@ -49,54 +51,44 @@ class DHCPServer(BaseService):
         self.is_debug = logger.isEnabledFor(logging.DEBUG)
         self.logger = logger
 
-    def get_usable_ip(self, excludes: List[IPv4Address] = []) -> IPv4Address:
-        leased_ips = [int(lease.ip) for lease in self._dhcp_leases]
-        if self.is_debug:
-            self.logger.debug(f'leased ips: {leased_ips}')
+    async def get_usable_ip(self,
+                            excludes: List[IPv4Address] = []) -> IPv4Address:
 
         excludes_int = [int(ip) for ip in excludes]
         for ip in self.config.server_network.hosts():
-
-            if self.is_debug:
-                self.logger.debug(f'Checking IP {IPv4Address(ip)}')
-            if int(ip) in excludes_int:
+            ip_int = int(ip)
+            if ip_int in self.reserved_ips:
                 continue
-            if int(ip) in self.reserved_ips:
+            if ip_int in excludes_int:
                 continue
-            if int(ip) not in leased_ips:
+            if self.database.is_ip_available(ip_int):
                 return ip
-        raise IPv4UnavailableError(f'DHCP server is full')
+        raise IPv4UnavailableError('DHCP server is full')
 
-    def is_ip_available(self,
-                        ip: IPv4Address,
-                        mac: Optional[bytes] = None) -> bool:
+    async def is_ip_available(self,
+                              ip: IPv4Address,
+                              mac: Optional[bytes] = None) -> bool:
         if int(ip) in self.reserved_ips:
             return False
+        if mac is not None:
+            lease = self.database.get_lease(mac)
+            if lease is not None and lease.ip == ip:
+                return True
+        return self.database.is_ip_available(int(ip))
 
-        for lease in self._dhcp_leases:
-            if int(ip) == int(lease.ip):
-                if mac == lease.mac:
-                    return True
-                return False
-        return True
-
-    def add_lease(self, lease: Lease) -> None:
-        self._dhcp_leases.add(lease)
+    async def add_lease(self, lease: Lease) -> None:
+        self.database.add_lease(lease)
         self.logger.info(f'new lease added: {lease}')
 
-    def get_lease_by_mac(self, mac: bytes) -> Optional[Lease]:
-        for lease in self._dhcp_leases:
-            if lease.mac == mac:
-                return lease
-        return None
+    async def get_lease_by_mac(self, mac: bytes) -> Optional[Lease]:
+        return self.database.get_lease(mac)
 
-    def renew_lease(self, lease: Lease) -> None:
-        lease.renew(self.config.lease_time_second)
-        self._dhcp_leases.add(lease)
+    async def renew_lease(self, lease: Lease) -> None:
+        self.database.renew_lease(lease)
         self.logger.info(f'lease {lease} renewed')
 
-    def remove_lease(self, lease: Lease) -> None:
-        self._dhcp_leases.remove(lease)
+    async def remove_lease(self, lease: Lease) -> None:
+        self.database.remove_lease(lease)
         self.logger.info(f'lease {lease} removed')
 
     async def restart(self) -> None:
@@ -127,8 +119,7 @@ class DHCPServer(BaseService):
             f'Max clients: {self.config.server_network.num_addresses - 3}')
         self.logger.info(
             f'DNS: {",".join([str(dns) for dns in self.config.dns_ips])}')
-        self.logger.info(
-            f'DHCP Lease time: {self.config.lease_time_second} seconds')
+        self.logger.info(f'DHCP Lease time: {self.config.lease_time} seconds')
 
         self.cleanup_task = asyncio.create_task(self.cleanup_leases())
 
@@ -137,10 +128,8 @@ class DHCPServer(BaseService):
             await asyncio.sleep(self.leases_cleanup_timer)
             if self.is_debug:
                 self.logger.debug('Cleaning up leases')
-            for lease in list(self._dhcp_leases):
-                if lease.expired:
-                    self.logger.info(f'Removing expired lease {lease}')
-                    self.remove_lease(lease)
+            async for lease in self.database.expired_leases():
+                self.database.remove_lease(lease)
 
     async def stop(self) -> None:
         self.logger.info('Stopping DHCP service')

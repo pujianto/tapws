@@ -7,8 +7,7 @@ from asyncio.transports import DatagramTransport
 from ipaddress import IPv4Address
 from typing import TYPE_CHECKING
 
-import macaddress
-
+from ...utils import format_mac
 from .lease import Lease
 
 if TYPE_CHECKING:
@@ -24,19 +23,29 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
     broadcast_ip = '255.255.255.255'
     broadcast_port = 68
 
+    __slots__ = (
+        'server',
+        '_response_map',
+        'allowed_requests',
+        'logger',
+        'is_debug',
+        'transport',
+    )
+
     def __init__(self, server: 'DHCPServer') -> None:
-        self._srv = server
+        self.server = server
         self._response_map = {
             dhcp.DHCPDISCOVER: self.send_offer,
             dhcp.DHCPREQUEST: self.send_response,
             dhcp.DHCPRELEASE: self.release_lease,
             dhcp.DHCPDECLINE: self.reinitialize_lease,
         }
-        logger = logging.getLogger('tapws.dhcp')
-        self.is_debug = logger.isEnabledFor(logging.DEBUG)
-        self.logger = logger
+        self.allowed_requests = self._response_map.keys()
 
-    def broadcast(self, packet: DHCPPacket) -> None:
+        self.logger = logging.getLogger('tapws.dhcp.protocol')
+        self.is_debug = self.logger.isEnabledFor(logging.DEBUG)
+
+    async def broadcast(self, packet: DHCPPacket) -> None:
         if self.is_debug:
             self.logger.debug(f'Broadcasting: {repr(packet)}')
         self.transport.sendto(bytes(packet),
@@ -46,22 +55,30 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         self.transport = transport
 
     def datagram_received(self, data: bytes, addr: tuple) -> None:
+
         try:
             packet = DHCPPacket(data)
-            mac = macaddress.parse(packet.chaddr, macaddress.OUI,
-                                   macaddress.MAC)
+            if packet.request_type not in self.allowed_requests:
+                if self.is_debug:
+                    self.logger.debug(
+                        f'Unknown request type: {packet.request_type}')
+                return
+
+            mac = format_mac(packet.chaddr)
             if self.is_debug:
                 self.logger.debug(
                     f'Incoming packet: {repr(packet)}. Mac: {mac}')
 
-            if packet.request_type:
-                cmd = self._response_map.get(packet.request_type, None)
-                if cmd:
-                    asyncio.create_task(cmd(packet))
+            cmd = self._response_map.get(packet.request_type, None)
+            if cmd:
+                asyncio.create_task(cmd(packet))
+
         except DpktError as e:
-            self.logger.info(f'Invalid packet received: {e}')
+            if self.is_debug:
+                self.logger.debug(f'Invalid packet: {e}')
         except ValueError as e:
-            self.logger.info(f'invalid mac format {e}')
+            if self.is_debug:
+                self.logger.debug(f'Invalid packet: {e}')
             return
         except Exception as e:
             self.logger.warning(f'Error parsing packet: {e}')
@@ -70,36 +87,29 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
     async def send_offer(self, packet: DHCPPacket) -> None:
 
         try:
-            selected_ip = self._srv.get_usable_ip()
-            temp_lease = Lease(
-                mac=packet.chaddr,
-                ip=int(selected_ip),
-                lease_time_second=self._srv.config.lease_time_second)
-
-            response = DHCPPacket.Offer(
-                ip=IPv4Address(temp_lease.ip),
-                router_ip=self._srv.config.server_router,
-                netmask_ip=self._srv.config.server_network.netmask,
-                mac=packet.chaddr,
-                secs=packet.secs,
-                xid=packet.xid,
-                lease_time=self._srv.config.lease_time_second,
-                dns_ips=self._srv.config.dns_ips)
+            selected_ip = await self.server.get_usable_ip()
+            response = DHCPPacket.Offer(ip=selected_ip,
+                                        mac=packet.chaddr,
+                                        secs=packet.secs,
+                                        xid=packet.xid,
+                                        **self.server.config.dhcp_opts())
 
         except IPv4UnavailableError as e:
             self.logger.warning(f'No more IP addresses available: {e}')
+            self.logger.info(
+                'Tips: increase the pool size (reduce the subnet size)')
             return
         except Exception as e:
             self.logger.error(f'(offer) DHCP server error {e}')
             return
-        self.broadcast(response)
+        await self.broadcast(response)
 
     async def release_lease(self, packet: DHCPPacket) -> None:
-        lease = self._srv.get_lease_by_mac(packet.chaddr)
+        lease = await self.server.get_lease_by_mac(packet.chaddr)
         if self.is_debug:
             self.logger.debug(f'Release for lease:{lease} requested')
         if lease is not None:
-            self._srv.remove_lease(lease)
+            await self.server.remove_lease(lease)
 
     async def reinitialize_lease(self, packet: DHCPPacket) -> None:
         """
@@ -112,7 +122,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         if self.validate_server_id(packet) is False:
             return
 
-        lease = self._srv.get_lease_by_mac(packet.chaddr)
+        lease = await self.server.get_lease_by_mac(packet.chaddr)
         if lease and lease.ip == packet.ciaddr:
             if self.is_debug:
                 self.logger.debug(f'Reinitialize lease for client: {lease}')
@@ -141,34 +151,28 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                 self.logger.debug(
                     f'Requested IP (OPT): {client_ip_int_or_byte}.')
 
-            lease = self._srv.get_lease_by_mac(packet.chaddr)
+            lease = await self.server.get_lease_by_mac(packet.chaddr)
             if lease:
-                self._srv.renew_lease(lease)
+                await self.server.renew_lease(lease)
             else:
                 # ensure ip is available
-                if self._srv.is_ip_available(client_ip,
-                                             mac=packet.chaddr) == False:
+                if await self.server.is_ip_available(client_ip) == False:
                     raise IPv4UnavailableError(
                         f'IP {client_ip} is already in use by another client')
 
-                lease = Lease(
-                    mac=packet.chaddr,
-                    ip=int(client_ip),
-                    lease_time_second=self._srv.config.lease_time_second)
+                lease = Lease(mac=packet.chaddr,
+                              ip=int(client_ip),
+                              lease_time=self.server.config.lease_time)
 
-                self._srv.add_lease(lease)
+                await self.server.add_lease(lease)
 
-            response = DHCPPacket.Ack(
-                ip=client_ip,
-                router_ip=self._srv.config.server_router,
-                netmask_ip=self._srv.config.server_network.netmask,
-                mac=packet.chaddr,
-                secs=packet.secs,
-                xid=packet.xid,
-                lease_time=self._srv.config.lease_time_second,
-                dns_ips=self._srv.config.dns_ips)
+            response = DHCPPacket.Ack(ip=client_ip,
+                                      mac=packet.chaddr,
+                                      secs=packet.secs,
+                                      xid=packet.xid,
+                                      **self.server.config.dhcp_opts())
 
-            self.broadcast(response)
+            await self.broadcast(response)
 
         except IPv4UnavailableError as e:
             if self.is_debug:
@@ -189,7 +193,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         """
 
         server_id = packet.get_option_value(dhcp.DHCP_OPT_SERVER_ID)
-        if server_id and server_id != self._srv.config.server_ip.packed:
+        if server_id and server_id != self.server.config.server_ip.packed:
             if self.is_debug:
                 self.logger.debug(
                     f'Server ID missmatch with server IP. Probably it is not for us.'
@@ -200,4 +204,4 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
     async def send_nak(self, packet: DHCPPacket) -> None:
 
         response = DHCPPacket.Nak(mac=packet.chaddr, xid=packet.xid)
-        self.broadcast(response)
+        await self.broadcast(response)

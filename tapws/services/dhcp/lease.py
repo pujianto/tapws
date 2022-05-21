@@ -15,12 +15,12 @@ class Lease:
         self,
         mac: bytes,
         ip: int,
-        lease_time_second: int,
+        lease_time: int,
         leased_at: datetime = datetime.now()) -> None:
         self.mac = mac
         self.ip = ip
         self.leased_at = leased_at
-        self.lease_time = lease_time_second
+        self.lease_time = lease_time
 
     def __hash__(self) -> int:
         return hash((self.ip, self.mac))
@@ -32,9 +32,10 @@ class Lease:
         return self.leased_at + timedelta(
             seconds=self.lease_time) < datetime.now()
 
-    def renew(self, lease_time_second: int) -> None:
+    def renew(self, lease_time: int) -> 'Lease':
         self.leased_at = datetime.now()
-        self.lease_time = lease_time_second
+        self.lease_time = lease_time
+        return self
 
     def __repr__(self) -> str:
 

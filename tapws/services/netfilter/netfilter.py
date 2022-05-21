@@ -9,6 +9,8 @@ from ..base import BaseService
 
 class Netfilter(BaseService):
 
+    __slots__ = ('public_interface', 'private_interface', 'logger', 'is_debug')
+
     def __init__(self, public_interface: str, private_interface: str) -> None:
         self.public_interface = public_interface
         self.private_interface = private_interface
@@ -44,11 +46,11 @@ class Netfilter(BaseService):
         forward_chain.insert_rule(egress_rule)
         postrouting_chain.insert_rule(translation_rule)
 
-    async def start(self) -> None:
+    async def up(self) -> None:
         self.logger.info('Bootstrapping netfilter (iptables) rules ...')
         self.bootstrap_netfilter()
 
-    async def stop(self) -> None:
+    async def down(self) -> None:
         self.logger.info('Cleaning up netfilter (iptables) rules ...')
         iptc.Chain(iptc.Table(iptc.Table.FILTER), 'FORWARD').flush()
         iptc.Chain(iptc.Table(iptc.Table.NAT), 'POSTROUTING').flush()
@@ -62,3 +64,6 @@ class Netfilter(BaseService):
                             protocol: str, public_ip: str) -> None:
 
         raise NotImplementedError('not implemented yet')
+
+    start = up
+    stop = down

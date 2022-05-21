@@ -5,6 +5,7 @@ import asyncio
 import logging
 from asyncio import create_task
 from functools import partial
+from typing import Set
 
 from pytun import IFF_NO_PI, IFF_TAP
 from pytun import Error as TunError
@@ -23,12 +24,16 @@ from .utils import format_mac
 
 class Server:
 
+    __slots__ = ('config', '_connections', 'is_debug', 'logger', 'tap', 'loop',
+                 'hw_addr', 'broadcast_addr', 'whitelist_macs', 'dhcp_svc',
+                 'netfilter_svc', 'ws_server')
+
     def __init__(
         self,
         config: ServerConfig,
     ) -> None:
         self.config = config
-        self._connections = set()
+        self._connections: Set[Connection] = set()
         logger = logging.getLogger('tapws.main')
         self.is_debug = logger.isEnabledFor(logging.DEBUG)
         self.logger = logger

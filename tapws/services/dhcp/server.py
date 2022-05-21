@@ -6,7 +6,7 @@ import logging
 import socket
 from functools import partial
 from ipaddress import IPv4Address
-from typing import List, Optional
+from typing import Optional
 
 from ..base import BaseService
 from .config import DHCPConfig
@@ -121,6 +121,8 @@ class DHCPServer(BaseService):
         self.logger.info(f'Lease time: {lease_time}')
 
         self.cleanup_task = asyncio.create_task(self.cleanup_leases())
+        self.cleanup_task.add_done_callback(
+            lambda _: self.logger.info('Lease cleaner service stopped'))
 
     async def cleanup_leases(self) -> None:
         while True:

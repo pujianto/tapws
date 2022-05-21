@@ -6,6 +6,8 @@ from typing import List
 
 
 class DHCPConfig:
+    __slots__ = ('server_ip', 'server_router', 'server_network',
+                 'bind_interface', 'lease_time', 'dns_ips')
 
     def __init__(
         self,
@@ -22,3 +24,16 @@ class DHCPConfig:
         self.dns_ips = dns_ips
         self.bind_interface = bind_interface
         self.lease_time = lease_time
+
+    @property
+    def netmask_ip(self) -> IPv4Address:
+        return self.server_network.netmask
+
+    def dhcp_opts(self) -> dict:
+        return {
+            'server_ip': self.server_ip,
+            'server_router': self.server_router,
+            'netmask_ip': self.netmask_ip,
+            'dns_ips': self.dns_ips,
+            'lease_time': self.lease_time,
+        }

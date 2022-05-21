@@ -85,15 +85,11 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                                ip=int(selected_ip),
                                lease_time=self.server.config.lease_time)
 
-            response = DHCPPacket.Offer(
-                ip=IPv4Address(temp_lease.ip),
-                router_ip=self.server.config.server_router,
-                netmask_ip=self.server.config.server_network.netmask,
-                mac=packet.chaddr,
-                secs=packet.secs,
-                xid=packet.xid,
-                lease_time=self.server.config.lease_time,
-                dns_ips=self.server.config.dns_ips)
+            response = DHCPPacket.Offer(ip=IPv4Address(temp_lease.ip),
+                                        mac=packet.chaddr,
+                                        secs=packet.secs,
+                                        xid=packet.xid,
+                                        **self.server.config.dhcp_opts())
 
         except IPv4UnavailableError as e:
             self.logger.warning(f'No more IP addresses available: {e}')
@@ -165,15 +161,11 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
 
                 self.server.add_lease(lease)
 
-            response = DHCPPacket.Ack(
-                ip=client_ip,
-                router_ip=self.server.config.server_router,
-                netmask_ip=self.server.config.server_network.netmask,
-                mac=packet.chaddr,
-                secs=packet.secs,
-                xid=packet.xid,
-                lease_time=self.server.config.lease_time,
-                dns_ips=self.server.config.dns_ips)
+            response = DHCPPacket.Ack(ip=client_ip,
+                                      mac=packet.chaddr,
+                                      secs=packet.secs,
+                                      xid=packet.xid,
+                                      **self.server.config.dhcp_opts())
 
             self.broadcast(response)
 

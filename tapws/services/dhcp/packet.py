@@ -32,7 +32,8 @@ class DHCPPacket(dhcp.DHCP):
     @classmethod
     def Offer(cls,
               ip: IPv4Address,
-              router_ip: IPv4Address,
+              server_ip: IPv4Address,
+              server_router: IPv4Address,
               netmask_ip: IPv4Address,
               secs: int,
               mac: str,
@@ -44,20 +45,21 @@ class DHCPPacket(dhcp.DHCP):
                      xid=xid,
                      secs=secs,
                      yiaddr=int(ip),
-                     siaddr=int(router_ip))
+                     siaddr=int(server_ip))
         message_type = bytes(chr(dhcp.DHCPOFFER), 'ascii')
 
         packet.opts = cls._build_options(message_type,
                                          lease_time=lease_time,
                                          dns_ips=dns_ips,
-                                         router_ip=router_ip,
+                                         router_ip=server_router,
                                          netmask=netmask_ip)
         return packet
 
     @classmethod
     def Ack(cls,
             ip: IPv4Address,
-            router_ip: IPv4Address,
+            server_ip: IPv4Address,
+            server_router: IPv4Address,
             netmask_ip: IPv4Address,
             mac: str,
             secs: int,
@@ -69,12 +71,12 @@ class DHCPPacket(dhcp.DHCP):
                      xid=xid,
                      secs=secs,
                      yiaddr=int(ip),
-                     siaddr=int(router_ip))
+                     siaddr=int(server_ip))
         message_type = bytes(chr(dhcp.DHCPACK), 'ascii')
         packet.opts = cls._build_options(message_type,
                                          lease_time=lease_time,
                                          dns_ips=dns_ips,
-                                         router_ip=router_ip,
+                                         router_ip=server_router,
                                          netmask=netmask_ip)
 
         return packet

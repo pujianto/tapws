@@ -46,22 +46,32 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         self.transport = transport
 
     def datagram_received(self, data: bytes, addr: tuple) -> None:
+        allowed_requests = self._response_map.keys()
+
         try:
             packet = DHCPPacket(data)
+            if packet.request_type not in allowed_requests:
+                if self.is_debug:
+                    self.logger.debug(
+                        f'Unknown request type: {packet.request_type}')
+                return
+
             mac = macaddress.parse(packet.chaddr, macaddress.OUI,
                                    macaddress.MAC)
             if self.is_debug:
                 self.logger.debug(
                     f'Incoming packet: {repr(packet)}. Mac: {mac}')
 
-            if packet.request_type:
-                cmd = self._response_map.get(packet.request_type, None)
-                if cmd:
-                    asyncio.create_task(cmd(packet))
+            cmd = self._response_map.get(packet.request_type, None)
+            if cmd:
+                asyncio.create_task(cmd(packet))
+
         except DpktError as e:
-            self.logger.info(f'Invalid packet received: {e}')
+            if self.is_debug:
+                self.logger.debug(f'Invalid packet: {e}')
         except ValueError as e:
-            self.logger.info(f'invalid mac format {e}')
+            if self.is_debug:
+                self.logger.debug(f'Invalid packet: {e}')
             return
         except Exception as e:
             self.logger.warning(f'Error parsing packet: {e}')
@@ -145,8 +155,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                 self.server.renew_lease(lease)
             else:
                 # ensure ip is available
-                if self.server.is_ip_available(client_ip,
-                                               mac=packet.chaddr) == False:
+                if self.server.is_ip_available(client_ip) == False:
                     raise IPv4UnavailableError(
                         f'IP {client_ip} is already in use by another client')
 

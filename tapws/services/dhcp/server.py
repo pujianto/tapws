@@ -69,7 +69,10 @@ class DHCPServer(BaseService):
                         mac: Optional[bytes] = None) -> bool:
         if int(ip) in self.reserved_ips:
             return False
-
+        if mac is not None:
+            lease = self.database.get_lease(mac)
+            if lease is not None and lease.ip == ip:
+                return True
         return self.database.is_ip_available(int(ip))
 
     def add_lease(self, lease: Lease) -> None:

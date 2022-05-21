@@ -1,17 +1,19 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
+import logging
 from typing import Generator, List, Optional
 
-from ...utils import format_mac
 from .lease import Lease
 
 
 class Database:
 
-    __slots__ = ('leases', 'lease_time')
+    __slots__ = ('leases', 'lease_time', 'logger', 'is_debug')
 
     def __init__(self, lease_time: int, *, leases: List[Lease] = []) -> None:
+        self.logger = logging.getLogger('tapws.dhcp.database')
+        self.is_debug = self.logger.isEnabledFor(logging.DEBUG)
         self.lease_time = lease_time
         self.leases: List[Lease] = leases
 
@@ -36,9 +38,15 @@ class Database:
         self.leases.append(lease)
 
     def remove_lease(self, lease: Lease) -> None:
+        if lease not in self.leases:
+            self.logger.warning(f'Lease {lease} not found in database')
+            return
+
         self.leases.remove(lease)
 
     def renew_lease(self, lease: Lease) -> None:
         existing_lease = self.get_lease(lease.mac)
-        if existing_lease is not None:
-            existing_lease.renew(self.lease_time)
+        if existing_lease is None:
+            self.logger.warning(f'Lease {lease} not found in database')
+            return
+        existing_lease.renew(self.lease_time)

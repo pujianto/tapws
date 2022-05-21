@@ -131,13 +131,10 @@ class Server:
         self.logger.info('Starting service...')
 
         self.loop.add_reader(self.tap.fileno(), partial(self.broadcast))
-
-        ws = websockets_serve(self.websocket_handler,
-                              self.config.host,
-                              self.config.port,
-                              ssl=self.config.ssl)
-
-        self.ws_server = await ws
+        self.ws_server = await websockets_serve(self.websocket_handler,
+                                                self.config.host,
+                                                self.config.port,
+                                                ssl=self.config.ssl)
         self.logger.info(
             f'Service running on {self.config.host}:{self.config.port}')
         if self.config.public_interface:

@@ -16,6 +16,7 @@ websockets = "10.3"
 
 [tool.poetry.dev-dependencies]
 yapf = "^0.32.0"
+bumpver = "^2022.1116"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
@@ -38,5 +39,5 @@ push = true
     "__version__ = '{pep440_version}'"
 ]
 "README.md" = [
-    "version: {version}",
+    "version: {pep440_version}",
 ]

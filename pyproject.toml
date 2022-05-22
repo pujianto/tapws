@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tapws"
-version = "v0.3.4"
+version = "0.3.4"
 description = "A simple virtual network interface over websocket"
 authors = ["Pujianto <hello@pujianto.net>"]
 license = "MIT"
@@ -32,10 +32,10 @@ push = true
 [tool.bumpver.file_patterns]
 "pyproject.toml" = [
     'current_version = "{version}"',
-    'version = "{version}"',
+    'version = "{pep440_version}"',
 ]
 "tapws/__init__.py" = [
-    "__version__ = '{version}'"
+    "__version__ = '{pep440_version}'"
 ]
 "README.md" = [
     "version: {version}",

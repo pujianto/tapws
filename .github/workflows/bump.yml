@@ -10,6 +10,8 @@ jobs:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
     steps:
+      - env:
+          GITHUB_TOKEN: ${{ secrets.pat }}
       - name: Checkout
         uses: actions/checkout@v3
       - name: Bump version

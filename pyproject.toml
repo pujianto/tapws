@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "tapws"
+version = "0.1.0-dev"
+description = "A simple virtual network interface over websocket"
+authors = ["Pujianto <hello@pujianto.net>"]
+license = "MIT"
+
+[tool.poetry.dependencies]
+python = "^3.10"
+dpkt = "1.9.7.2"
+macaddress = "1.2.0"
+python-iptables = "1.0.0"
+python-pytun = "2.4.1"
+uvloop = "0.16.0"
+websockets = "10.3"
+
+[tool.poetry.dev-dependencies]
+yapf = "^0.32.0"
+
+[build-system]
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

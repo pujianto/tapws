@@ -1,0 +1,108 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<section>
+    <article>
+        <header>System Information</header>
+        <div class="grid">
+            <div>
+                <ul style="list-style-type:none;" class="system-information">
+                    <li>Site URL <code>http://localhost:8080</code></li>
+                    <li>Websocket <code>http://localhost:8080/ws</code></li>
+                    <li>Uptime <code>2 hours, 30 minutes</code></li>
+                </ul>
+            </div>
+            <div>
+                <ul style="list-style-type:none;" class="system-information">
+                    <li>DHCP Status</li>
+                    <li>Interface<code>tapx</code></li>
+                    <li>Address<code>00:6b:77:ff:79:dc</code></li>
+                    <li>IP<code>10.11.12.254</code></li>
+                    <li>Netmask<code>255.255.255.0</code></li>
+                    <li>Router IP<code>10.11.12.254</code></li>
+                    <li>Lease Time &amp; Leased IPs <code>2 IPs</code><code>infinite</code></li>
+                </ul>
+
+            </div>
+        </div>
+
+    </article>
+    <article>
+        <header>Port Forwarding Rules</header>
+        <table role="grid" responsive>
+            <thead>
+                <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Src. Port</th>
+                    <th scope="col">Dest. Port</th>
+                    <th scope="col">Dest. Host</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Action</th>
+
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <th scope="row">1</th>
+                    <td><a href="">nginx http server in browser (Firefox)</a></td>
+                    <td>8081</td>
+                    <td>80</td>
+                    <td>10.11.12.2</td>
+                    <td>Disabled</td>
+                    <td><a href="">disable</a> </td>
+                </tr>
+                <tr>
+                    <th scope="row">2</th>
+                    <td><a href="">ssh server in browser (Chrome)</a></td>
+                    <td>8022</td>
+                    <td>22</td>
+                    <td>10.11.12.10</td>
+                    <td>Enabled</td>
+                    <td><a href="">enable</a> </td>
+                </tr>
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="5"></td>
+                    <td> <a href="#" class="button">Add</a>
+                    </td>
+                    <td>
+                        <a href="" class="">clear</a>
+                    </td>
+
+                </tr>
+            </tfoot>
+        </table>
+    </article>
+    <article>
+        <header>Leased IP Addresses</header>
+        <table role="grid" responsive>
+            <thead>
+                <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">Mac</th>
+                    <th scope="col">IP</th>
+                    <th scope="col">Lease Time</th>
+
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <th scope="row">1</th>
+                    <td><code>00:df:ff:ef:f7:df</code></td>
+                    <td><code>10.11.12.2</code></td>
+                    <td>infinite</td>
+                </tr>
+                <tr>
+                    <th scope="row">2</th>
+                    <td><code>e2:5f:d2:fa:ab:43</code></td>
+                    <td><code>10.11.12.10</code></td>
+                    <td>infinite</td>
+                </tr>
+            </tbody>
+        </table>
+    </article>
+
+</section>
+{% endblock %}

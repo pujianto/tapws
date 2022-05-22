@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>tapws</title>
+  <meta name="description" content="tapws - Welcome page">
+
+  <link rel="stylesheet" type="text/css" href="/static/css/style.css">
+  <link rel="stylesheet" type="text/css" href="/static/css/custom.css">
+
+</head>
+
+<body>
+
+  <!-- Header -->
+  <nav class="container">
+    <ul>
+      <li>
+        <a href=" /" aria-label="home">
+          <img src="/static/images/tapws.svg" alt="tapws logo">
+        </a>
+      </li>
+    </ul>
+    <ul>
+      <li>virtual network interface over websocket
+      </li>
+    </ul>
+  </nav>
+
+  <!-- ./ Header -->
+
+  <!-- Main -->
+  <main class="container">
+    {% block content %}
+    container
+    {% endblock %}
+  </main><!-- ./ Main -->
+</body>
+
+</html>

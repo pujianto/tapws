@@ -7,6 +7,7 @@ from asyncio.futures import Future
 from functools import partial
 from typing import Set, Tuple
 
+import aiohttp_jinja2
 from aiohttp import web
 from pytun import Error as TunError
 from pytun import TunTapDevice
@@ -59,7 +60,15 @@ class WebsocketHandler:
         return ws
 
     async def web_handler(self, request: web.Request) -> web.Response:
-        return web.Response(text='hola!')
+
+        context = {
+            'hw_addr': self.hw_addr,
+            'debug': self.is_debug,
+        }
+
+        response = aiohttp_jinja2.render_template('index.html', request,
+                                                  context)
+        return response
 
     def broadcast(self):
         message = self.device.read(1024 * 4)

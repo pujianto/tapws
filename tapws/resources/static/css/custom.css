@@ -1,0 +1,21 @@
+body>main {
+    padding: 0px;
+}
+
+body>main>section {
+    --block-spacing-vertical: var(--spacing);
+}
+
+ul.system-information>li {
+    list-style: none;
+}
+
+ul.system-information>li>code {
+    float: right;
+    margin-right: 10px;
+    padding: .275rem .5rem;
+}
+
+main>section>article>table {
+    margin-bottom: 0px;
+}

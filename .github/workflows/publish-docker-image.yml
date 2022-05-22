@@ -10,6 +10,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.pat }}
       - name: Docker meta
         id: meta
         uses: docker/metadata-action@v4

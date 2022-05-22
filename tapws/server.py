@@ -45,8 +45,10 @@ class Server:
         self.runner = web.AppRunner(self.app)
         self.app.on_shutdown.append(self._on_shutdown)
         await self.runner.setup()
-        self.site = web.TCPSite(self.runner, self.config.host,
-                                self.config.port)
+        self.site = web.TCPSite(self.runner,
+                                self.config.host,
+                                self.config.port,
+                                ssl_context=self.config.ssl)
         self.loop.add_reader(self.device.fileno(),
                              partial(self.ws_handler.broadcast))
         await self.site.start()
@@ -64,7 +66,7 @@ class Server:
         await self.site.stop()
         await self.runner.cleanup()
 
-    async def __aenter__(self) -> 'Serv':
+    async def __aenter__(self) -> 'Server':
         await self.start()
         return self
 

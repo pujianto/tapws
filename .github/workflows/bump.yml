@@ -11,8 +11,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        env:
-          GITHUB_TOKEN: ${{ secrets.pat }}
+        with:
+          token: ${{ secrets.pat }}
         uses: actions/checkout@v3
       - name: Bump version
         uses: actions/setup-python@v3
@@ -24,6 +24,4 @@ jobs:
           git config --global user.name "${{ github.actor }}"
       - run: pip install bumpver
       - name: Bump version
-        env:
-          GITHUB_TOKEN: ${{ secrets.pat }}
         run: python -m bumpver update --patch -n

@@ -6,8 +6,24 @@ on:
     types:
       - closed
 jobs:
-  bump:
+  check_label:
     if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - id: filter_labels
+        uses: binowork/match-labels@v0.0.2
+        with:
+          match_labels: |
+            major
+            minor
+            patch
+    outputs:
+      matched_count: ${{ steps.filter_labels.outputs.matched_count }}
+      matched_labels: ${{ steps.filter_labels.outputs.matched_labels }}
+
+  bump:
+    needs: [check_label]
+    if: ${{ needs.check_label.outputs.matched_count == 1 }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -21,7 +37,7 @@ jobs:
       - name: Git Setup
         run: |
           git config --global user.email "${{ github.actor }}@users.noreply.github.com"
-          git config --global user.name "${{ github.actor }}"
+          git config --global user.name "GitHub Action"
       - run: pip install bumpver
       - name: Bump version
-        run: python -m bumpver update --patch -n
+        run: python -m bumpver update --${{ needs.check_label.outputs.matched_labels }}

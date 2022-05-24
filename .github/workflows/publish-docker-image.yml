@@ -1,6 +1,6 @@
-name: Publish to Docker Hub
+name: Publish
 on:
-  create:
+  push:
     tags:
       - "v*"
 

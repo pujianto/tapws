@@ -81,6 +81,7 @@ class Server:
             await self.netfilter_svc.stop()
         await self.site.stop()
         await self.runner.cleanup()
+        self.loop.remove_reader(self.device.fileno())
 
     async def __aenter__(self) -> "Server":
         await self.start()

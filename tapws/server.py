@@ -174,6 +174,7 @@ class Server:
             await self.netfilter_svc.stop()
 
         await self.ws_server.wait_closed()
+        self.loop.remove_reader(self.tap.fileno())
         self.tap.close()
         self._waiter_.set_result(None)
 

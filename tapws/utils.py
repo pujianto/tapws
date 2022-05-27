@@ -11,4 +11,4 @@ def format_mac(data: bytes) -> str:
     :rtype: str
     :exception: ValueError
     """
-    return str(macaddress.MAC(data)).lower().replace('-', ':')
+    return str(macaddress.MAC(data)).lower().replace("-", ":")

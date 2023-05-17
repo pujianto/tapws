@@ -1,25 +1,23 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-
-from abc import ABC, abstractmethod
-from typing import Type
+import abc
 
 
-class BaseService(ABC):
+class BaseService(object):  # pragma: no cover
+
     """
     Base class for tapws services.
     """
 
+    __metaclass__ = abc.ABCMeta
+
     def __init__(self) -> None:
         pass
 
-    @abstractmethod
+    @abc.abstractmethod
     async def start(self) -> None:
         raise NotImplementedError
 
-    @abstractmethod
+    @abc.abstractmethod
     async def stop(self) -> None:
         raise NotImplementedError
-
-
-TypeBaseService = Type[BaseService]

@@ -6,7 +6,7 @@ import logging
 from asyncio import create_task
 from asyncio.futures import Future
 from functools import partial
-from typing import Any, Generator, Set
+import typing
 
 from pytun import IFF_NO_PI, IFF_TAP
 from pytun import Error as TunError
@@ -17,9 +17,7 @@ from websockets.server import serve as websockets_serve
 
 from .config import ServerConfig
 from .connection import Connection
-from .services.dhcp.config import DHCPConfig
-from .services.dhcp.server import DHCPServer
-from .services.netfilter import Netfilter
+from .services.base import BaseService
 from .utils import format_mac
 
 
@@ -34,25 +32,27 @@ class Server:
         "hw_addr",
         "broadcast_addr",
         "whitelist_macs",
-        "dhcp_svc",
-        "netfilter_svc",
         "ws_server",
         "_waiter_",
+        "services",
     )
     _waiter_: Future[None]
 
     def __init__(
         self,
         config: ServerConfig,
+        services: typing.List[BaseService],
+        logger: logging.Logger = logging.getLogger("tapws.main"),
+        tuntap_device_cls: typing.Type[TunTapDevice] = TunTapDevice,
     ) -> None:
         self.config = config
-        self._connections: Set[Connection] = set()
-        logger = logging.getLogger("tapws.main")
+        self._connections: typing.Set[Connection] = set()
         self.is_debug = logger.isEnabledFor(logging.DEBUG)
         self.logger = logger
+        self.services = services
 
         try:
-            self.tap = TunTapDevice(
+            self.tap = tuntap_device_cls(
                 self.config.private_interface, flags=(IFF_TAP | IFF_NO_PI)
             )
         except TunError as e:
@@ -73,22 +73,6 @@ class Server:
         self.tap.netmask = str(self.config.intra_network.netmask)
         self.tap.mtu = 1500
         self.hw_addr = format_mac(self.tap.hwaddr)
-
-        if self.config.enable_dhcp:
-            dhcp_config = DHCPConfig(
-                server_ip=self.config.intra_ip,
-                server_network=self.config.intra_network,
-                server_router=self.config.router_ip,
-                dns_ips=self.config.dns_ips,
-                lease_time=self.config.dhcp_lease_time,
-                bind_interface=self.config.private_interface,
-            )
-            self.dhcp_svc = DHCPServer(dhcp_config)
-        if self.config.public_interface:
-            self.netfilter_svc = Netfilter(
-                public_interface=self.config.public_interface,
-                private_interface=self.config.private_interface,
-            )
 
         self.loop = asyncio.get_running_loop()
 
@@ -163,10 +147,8 @@ class Server:
             ssl=self.config.ssl,
         )
         self.logger.info(f"Service running on {self.config.host}:{self.config.port}")
-        if self.config.public_interface:
-            await self.netfilter_svc.start()
-        if self.config.enable_dhcp:
-            await self.dhcp_svc.start()
+        for service in self.services:
+            await service.start()
         self._waiter_ = self.loop.create_future()
 
     async def _blocking(self) -> None:
@@ -177,10 +159,8 @@ class Server:
         self.logger.info("Stopping service...")
         self.ws_server.close()
 
-        if self.config.enable_dhcp:
-            await self.dhcp_svc.stop()
-        if self.config.public_interface:
-            await self.netfilter_svc.stop()
+        for service in self.services:
+            await service.stop()
 
         await self.ws_server.wait_closed()
         self.loop.remove_reader(self.tap.fileno())
@@ -191,8 +171,8 @@ class Server:
         await self.start()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(self, *args) -> None:
         await self.stop()
 
-    def __await__(self) -> Generator[Any, None, None]:
+    def __await__(self) -> typing.Generator[typing.Any, None, None]:
         return self._blocking().__await__()

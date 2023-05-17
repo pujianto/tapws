@@ -6,7 +6,7 @@ from typing import Optional
 from websockets.legacy.server import WebSocketServerProtocol
 
 
-class Connection:
+class Connection:  # pragma: no cover
     __slots__ = ("_mac", "websocket")
 
     def __init__(

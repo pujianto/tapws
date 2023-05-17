@@ -18,9 +18,6 @@ class Lease:
         self.leased_at = leased_at
         self.lease_time = lease_time
 
-    def __hash__(self) -> int:
-        return hash((self.ip, self.mac))
-
     @property
     def expired(self) -> bool:
         if self.lease_time == -1:

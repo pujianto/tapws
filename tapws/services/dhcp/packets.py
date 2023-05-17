@@ -2,13 +2,26 @@
 # -*- coding: utf-8 -*-
 
 from ipaddress import IPv4Address
-from typing import List, Optional
+import typing
 
 from dpkt import dhcp
 
 
 class DHCPPacket(dhcp.DHCP):
-    def get_option_value(self, option_code: int) -> Optional[str]:
+    opts: typing.List[typing.Tuple]
+    secs: int
+    xid: int
+    ciaddr: int
+    chaddr: bytes
+
+    def __init__(self, *args, **kwargs) -> None:
+        self.secs = 0
+        self.xid = 0
+        self.ciaddr = 0
+        self.chaddr = b""
+        super().__init__(*args, **kwargs)
+
+    def get_option_value(self, option_code: int) -> typing.Optional[str]:
         for option in self.opts:
             opt_key, opt_value = option
             if opt_key == option_code:
@@ -16,13 +29,13 @@ class DHCPPacket(dhcp.DHCP):
         return None
 
     @property
-    def request_type(self) -> Optional[int]:
+    def request_type(self) -> int:
         if self.op != dhcp.DHCP_OP_REQUEST:  # type: ignore
-            return None
+            return -1
         value = self.get_option_value(dhcp.DHCP_OPT_MSGTYPE)
         if value:
             return ord(value)
-        return None
+        return -1
 
     @staticmethod
     def seconds_to_bytes(seconds: int) -> bytes:
@@ -36,7 +49,7 @@ class DHCPPacket(dhcp.DHCP):
         server_router: IPv4Address,
         netmask_ip: IPv4Address,
         secs: int,
-        mac: str,
+        mac: bytes,
         xid: int,
         lease_time: int = 3600,
         dns_ips: list = ["1.1.1.1"],
@@ -67,7 +80,7 @@ class DHCPPacket(dhcp.DHCP):
         server_ip: IPv4Address,
         server_router: IPv4Address,
         netmask_ip: IPv4Address,
-        mac: str,
+        mac: bytes,
         secs: int,
         xid: int,
         lease_time: int = 3600,
@@ -93,7 +106,7 @@ class DHCPPacket(dhcp.DHCP):
         return packet
 
     @classmethod
-    def Nak(cls, xid: str, mac: str) -> "DHCPPacket":
+    def Nak(cls, xid: int, mac: bytes) -> "DHCPPacket":
         packet = cls(
             op=dhcp.DHCP_OP_REPLY,
             chaddr=mac,
@@ -107,10 +120,10 @@ class DHCPPacket(dhcp.DHCP):
     def _build_options(
         message_type: bytes,
         lease_time: int,
-        dns_ips: List[IPv4Address],
+        dns_ips: typing.List[IPv4Address],
         router_ip: IPv4Address,
         netmask: IPv4Address,
-    ) -> list:
+    ) -> typing.List:
         if lease_time != -1:
             renew_time = int(lease_time * 0.5)
             rebind_time = int(lease_time * 0.875)

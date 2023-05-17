@@ -6,7 +6,9 @@ import logging
 from asyncio.transports import DatagramTransport
 from functools import partial
 from ipaddress import IPv4Address
+from struct import pack
 from typing import TYPE_CHECKING
+import typing
 
 from .lease import Lease
 
@@ -15,12 +17,13 @@ if TYPE_CHECKING:
 
 from dpkt import Error as DpktError
 
-from .packet import DHCPPacket, IPv4UnavailableError, dhcp
+from .packets import DHCPPacket, IPv4UnavailableError, dhcp
 
 
 class DHCPServerProtocol(asyncio.DatagramProtocol):
     broadcast_ip = "255.255.255.255"
     broadcast_port = 68
+    response_map: typing.Dict[int, typing.Callable]
 
     __slots__ = (
         "server",
@@ -73,11 +76,11 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         except Exception as e:
             self.logger.warning(f"Error parsing packet: {e}")
             return
-
-        cmd = self.response_map[packet.request_type](packet)
-        asyncio.create_task(cmd, name="broadcast").add_done_callback(
-            partial(self._on_send_done)
-        )
+        cmd = self.response_map.get(packet.request_type)
+        if cmd:
+            asyncio.create_task(cmd(packet), name="broadcast").add_done_callback(
+                partial(self._on_send_done)
+            )
 
     def _on_send_done(self, future: asyncio.Future) -> None:
         if future.exception():

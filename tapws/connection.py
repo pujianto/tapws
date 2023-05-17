@@ -16,7 +16,7 @@ class Connection:
         self.websocket = websocket
 
     def __repr__(self) -> str:
-        return f"Connection({self.websocket.id})"
+        return f"Connection({self.websocket})"
 
     @property
     def mac(self) -> Optional[str]:

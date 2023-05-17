@@ -114,13 +114,13 @@ class Server:
 
                 if dst_mac in [self.broadcast_addr, connection.mac]:
                     create_task(
-                        connection.websocket.send(message), name="broadcast"
+                        connection.websocket.send(message=message), name="broadcast"
                     ).add_done_callback(partial(self._on_send_done))
                     continue
 
                 if dst_mac.startswith(self.whitelist_macs):
                     create_task(
-                        connection.websocket.send(message), name="broadcast"
+                        connection.websocket.send(message=message), name="broadcast"
                     ).add_done_callback(partial(self._on_send_done))
 
                     continue

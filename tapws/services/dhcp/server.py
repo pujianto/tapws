@@ -13,7 +13,7 @@ from ..base import BaseService
 from .config import DHCPConfig
 from .database import Database
 from .lease import Lease
-from .packet import IPv4UnavailableError
+from .packets import IPv4UnavailableError
 from .protocol import DHCPServerProtocol
 
 

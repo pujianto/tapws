@@ -3,24 +3,25 @@
 
 import os
 import ssl
-from ipaddress import IPv4Address, IPv4Network
+from ipaddress import IPv4Address, IPv4Network, AddressValueError
 from typing import List, Optional
 
 
 class ServerConfig:
     def __init__(
         self,
-        host: str = "0.0.0.0",
-        port: int = 8080,
-        private_interface: str = "tap0",
-        intra_ip: IPv4Address = IPv4Address("10.11.12.254"),
-        intra_network: IPv4Network = IPv4Network("10.11.12.0"),
-        router_ip: IPv4Address = IPv4Address("10.11.12.254"),
-        dns_ips: List[IPv4Address] = [IPv4Address("1.1.1.1")],
-        enable_dhcp: bool = False,
-        dhcp_lease_time: int = 3600,
-        ssl: Optional[ssl.SSLContext] = None,
+        host: str,
+        port: int,
+        private_interface: str,
+        intra_ip: IPv4Address,
+        intra_network: IPv4Network,
+        router_ip: IPv4Address,
+        dns_ips: List[IPv4Address],
+        enable_dhcp: bool,
+        dhcp_lease_time: int,
+        *,
         public_interface: Optional[str] = None,
+        ssl: Optional[ssl.SSLContext] = None,
     ):
         self.host = host
         self.port = port
@@ -60,10 +61,14 @@ class ServerConfig:
             ssl_context.load_cert_chain(
                 fullchain_cert_path, keyfile=key_path, password=passphrase
             )
-        host = os.environ.get("HOST", "0.0.0.0")
+        try:
+            host = IPv4Address(os.environ.get("HOST", "0.0.0.0")).exploded
+        except AddressValueError as e:
+            raise ValueError(str(e))
+
         port = int(os.environ.get("PORT", "8080"))
 
-        # Specify the (public) network interface name you want to 'share' with tap devices
+        # Specify the (public) network interface name you want to 'share' with the tap device
         public_interface = os.environ.get("PUBLIC_INTERFACE", None)
         interface_ip = IPv4Address(os.environ.get("INTERFACE_IP", "10.11.12.254"))
         interface_name = "tapx"
@@ -88,16 +93,21 @@ class ServerConfig:
             raise ValueError("DHCP_LEASE_TIME must be -1 or greater")
         dns_ips = [IPv4Address("1.1.1.1"), IPv4Address("8.8.8.8")]
 
+        private_interface = interface_name
+        intra_ip = interface_ip
+        intra_network = interface_network
+        router_ip = interface_ip
+
         return cls(
-            host=host,
-            port=port,
-            private_interface=interface_name,
+            host,
+            port,
+            private_interface,
+            intra_ip,
+            intra_network,
+            router_ip,
+            dns_ips,
+            enable_dhcp,
+            dhcp_lease_time,
             public_interface=public_interface,
-            intra_ip=interface_ip,
-            intra_network=interface_network,
-            router_ip=interface_ip,
-            enable_dhcp=enable_dhcp,
-            dhcp_lease_time=dhcp_lease_time,
             ssl=ssl_context,
-            dns_ips=dns_ips,
         )

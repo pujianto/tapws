@@ -19,15 +19,15 @@ async def main():
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, waiter.set_result, None)
 
-    print('Starting service')
+    print("Starting service")
     async with Server(ServerConfig.From_env()):
         await waiter
-        print('Stopping service')
-    print('Service Stopped')
+        print("Stopping service")
+    print("Service Stopped")
 
 
-if __name__ == '__main__':
-    log_level = os.environ.get('LOG_LEVEL', 'ERROR').upper()
+if __name__ == "__main__":
+    log_level = os.environ.get("LOG_LEVEL", "ERROR").upper()
     logging.basicConfig(stream=sys.stdout, level=log_level)
     uvloop.install()
-    asyncio.run(main(), debug=log_level == 'DEBUG')
+    asyncio.run(main(), debug=log_level == "DEBUG")

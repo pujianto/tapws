@@ -18,23 +18,21 @@ from .protocol import DHCPServerProtocol
 
 
 class DHCPServer(BaseService):
-
     __slots__ = (
-        'config',
-        'loop',
-        'cleanup_timer',
-        'reserved_ips',
-        'is_debug',
-        'logger',
-        'transport',
-        'cleanup_task',
-        'database',
-        '_waiter_',
+        "config",
+        "loop",
+        "cleanup_timer",
+        "reserved_ips",
+        "is_debug",
+        "logger",
+        "transport",
+        "cleanup_task",
+        "database",
+        "_waiter_",
     )
     _waiter_: Future[None]
 
     def __init__(self, config: DHCPConfig) -> None:
-
         self.config = config
         self.database = Database(self.config.lease_time)
 
@@ -49,7 +47,7 @@ class DHCPServer(BaseService):
 
         self.cleanup_timer = 60
 
-        logger = logging.getLogger('tapws.dhcp')
+        logger = logging.getLogger("tapws.dhcp")
         self.is_debug = logger.isEnabledFor(logging.DEBUG)
         self.logger = logger
 
@@ -62,11 +60,11 @@ class DHCPServer(BaseService):
             if self.database.is_ip_available(ip_int):
                 return ip
 
-        raise IPv4UnavailableError('DHCP server is full')
+        raise IPv4UnavailableError("DHCP server is full")
 
-    async def is_ip_available(self,
-                              ip: IPv4Address,
-                              mac: Optional[bytes] = None) -> bool:
+    async def is_ip_available(
+        self, ip: IPv4Address, mac: Optional[bytes] = None
+    ) -> bool:
         if int(ip) in self.reserved_ips:
             return False
         if mac is not None:
@@ -77,55 +75,55 @@ class DHCPServer(BaseService):
 
     async def add_lease(self, lease: Lease) -> None:
         self.database.add_lease(lease)
-        self.logger.info(f'leasing {lease}')
+        self.logger.info(f"leasing {lease}")
 
     async def get_lease_by_mac(self, mac: bytes) -> Optional[Lease]:
         return self.database.get_lease(mac)
 
     async def renew_lease(self, lease: Lease) -> None:
         self.database.renew_lease(lease)
-        self.logger.info(f'{lease} renewed')
+        self.logger.info(f"{lease} renewed")
 
     async def remove_lease(self, lease: Lease) -> None:
         self.database.remove_lease(lease)
-        self.logger.info(f'{lease} removed')
+        self.logger.info(f"{lease} removed")
 
     async def restart(self) -> None:
-        self.logger.info('restarting DHCP service')
+        self.logger.info("restarting DHCP service")
         await self.stop()
         await self.start()
-        self.logger.info('DHCP service restarted')
+        self.logger.info("DHCP service restarted")
 
     async def start(self) -> None:
-
         factory = partial(DHCPServerProtocol, self)
         self.transport, _ = await self.loop.create_datagram_endpoint(
-            lambda: factory(),
-            local_addr=('0.0.0.0', 67),
-            allow_broadcast=True)
-
-        self.transport.get_extra_info('socket').setsockopt(
-            socket.SOL_SOCKET, 25, bytes(self.config.bind_interface, 'utf-8'))
-
-        name = '%s:%d' % self.transport.get_extra_info('socket').getsockname()
-        self.logger.info('Starting DHCP service')
-        self.logger.info(
-            f'DHCP listening on {name}. interface: {self.config.bind_interface}'
+            lambda: factory(), local_addr=("0.0.0.0", 67), allow_broadcast=True
         )
-        self.logger.info(f'Router (Gateway): {self.config.server_router}')
-        self.logger.info(f'Subnet: {self.config.server_network.netmask}')
+
+        self.transport.get_extra_info("socket").setsockopt(
+            socket.SOL_SOCKET, 25, bytes(self.config.bind_interface, "utf-8")
+        )
+
+        name = "%s:%d" % self.transport.get_extra_info("socket").getsockname()
+        self.logger.info("Starting DHCP service")
         self.logger.info(
-            f'Max clients: {self.config.server_network.num_addresses - 3}')
-        self.logger.info(
-            f'DNS: {",".join([str(dns) for dns in self.config.dns_ips])}')
-        lease_time = str(
-            self.config.lease_time
-        ) + ' seconds' if self.config.lease_time >= 0 else 'infinite'
-        self.logger.info(f'Lease time: {lease_time}')
+            f"DHCP listening on {name}. interface: {self.config.bind_interface}"
+        )
+        self.logger.info(f"Router (Gateway): {self.config.server_router}")
+        self.logger.info(f"Subnet: {self.config.server_network.netmask}")
+        self.logger.info(f"Max clients: {self.config.server_network.num_addresses - 3}")
+        self.logger.info(f'DNS: {",".join([str(dns) for dns in self.config.dns_ips])}')
+        lease_time = (
+            str(self.config.lease_time) + " seconds"
+            if self.config.lease_time >= 0
+            else "infinite"
+        )
+        self.logger.info(f"Lease time: {lease_time}")
 
         self.cleanup_task = asyncio.create_task(self.cleanup_leases())
         self.cleanup_task.add_done_callback(
-            lambda _: self.logger.info('Lease cleaner service stopped'))
+            lambda _: self.logger.info("Lease cleaner service stopped")
+        )
         self._waiter_ = self.loop.create_future()
 
     async def _blocking(self) -> None:
@@ -136,18 +134,18 @@ class DHCPServer(BaseService):
         while True:
             await asyncio.sleep(self.cleanup_timer)
             if self.is_debug:
-                self.logger.debug('Cleaning up expired leases')
+                self.logger.debug("Cleaning up expired leases")
             async for lease in self.database.expired_leases():
                 self.database.remove_lease(lease)
 
     async def stop(self) -> None:
-        self.logger.info('Stopping DHCP service')
+        self.logger.info("Stopping DHCP service")
         self.cleanup_task.cancel()
         self.transport.close()
-        self.logger.info('DHCP service stopped')
+        self.logger.info("DHCP service stopped")
         self._waiter_.set_result(None)
 
-    async def __aenter__(self) -> 'DHCPServer':
+    async def __aenter__(self) -> "DHCPServer":
         await self.start()
         return self
 

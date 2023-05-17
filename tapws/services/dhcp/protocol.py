@@ -19,20 +19,19 @@ from .packet import DHCPPacket, IPv4UnavailableError, dhcp
 
 
 class DHCPServerProtocol(asyncio.DatagramProtocol):
-
-    broadcast_ip = '255.255.255.255'
+    broadcast_ip = "255.255.255.255"
     broadcast_port = 68
 
     __slots__ = (
-        'server',
-        'response_map',
-        'allowed_requests',
-        'logger',
-        'is_debug',
-        'transport',
+        "server",
+        "response_map",
+        "allowed_requests",
+        "logger",
+        "is_debug",
+        "transport",
     )
 
-    def __init__(self, server: 'DHCPServer') -> None:
+    def __init__(self, server: "DHCPServer") -> None:
         self.server = server
         self.response_map = {
             dhcp.DHCPDISCOVER: self.send_offer,
@@ -42,65 +41,64 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         }
 
         self.allowed_requests = self.response_map.keys()
-        self.logger = logging.getLogger('tapws.dhcp.protocol')
+        self.logger = logging.getLogger("tapws.dhcp.protocol")
         self.is_debug = self.logger.isEnabledFor(logging.DEBUG)
 
     async def broadcast(self, packet: DHCPPacket) -> None:
         if self.is_debug:
-            self.logger.debug(f'Broadcasting: {repr(packet)}')
-        self.transport.sendto(bytes(packet),
-                              (self.broadcast_ip, self.broadcast_port))
+            self.logger.debug(f"Broadcasting: {repr(packet)}")
+        self.transport.sendto(bytes(packet), (self.broadcast_ip, self.broadcast_port))
 
     def connection_made(self, transport: DatagramTransport) -> None:
         self.transport = transport
 
     def datagram_received(self, data: bytes, addr: tuple) -> None:
-
         try:
             packet = DHCPPacket(data)
             if self.is_debug:
-                self.logger.debug(f'Received: {repr(packet)}')
+                self.logger.debug(f"Received: {repr(packet)}")
             if packet.request_type not in self.allowed_requests:
                 if self.is_debug:
-                    self.logger.debug(
-                        f'Unknown request type: {packet.request_type}')
+                    self.logger.debug(f"Unknown request type: {packet.request_type}")
                 return
 
         except DpktError as e:
             if self.is_debug:
-                self.logger.debug(f'Invalid packet: {e}')
+                self.logger.debug(f"Invalid packet: {e}")
             return
         except ValueError as e:
             if self.is_debug:
-                self.logger.debug(f'Invalid packet: {e}')
+                self.logger.debug(f"Invalid packet: {e}")
             return
         except Exception as e:
-            self.logger.warning(f'Error parsing packet: {e}')
+            self.logger.warning(f"Error parsing packet: {e}")
             return
 
         cmd = self.response_map[packet.request_type](packet)
-        asyncio.create_task(cmd, name='broadcast').add_done_callback(
-            partial(self._on_send_done))
+        asyncio.create_task(cmd, name="broadcast").add_done_callback(
+            partial(self._on_send_done)
+        )
 
     def _on_send_done(self, future: asyncio.Future) -> None:
         if future.exception():
-            self.logger.warning(f'Error sending packet: {future.exception()}')
+            self.logger.warning(f"Error sending packet: {future.exception()}")
 
     async def send_offer(self, packet: DHCPPacket) -> None:
         try:
             selected_ip = await self.server.get_available_ip()
 
         except IPv4UnavailableError as e:
-            self.logger.warning(f'No more IP addresses available: {e}')
-            self.logger.info(
-                'Tips: increase the pool size (reduce the subnet size)')
+            self.logger.warning(f"No more IP addresses available: {e}")
+            self.logger.info("Tips: increase the pool size (reduce the subnet size)")
             return
 
-        response = DHCPPacket.Offer(ip=selected_ip,
-                                    mac=packet.chaddr,
-                                    secs=packet.secs,
-                                    xid=packet.xid,
-                                    **self.server.config.dhcp_opts())
+        response = DHCPPacket.Offer(
+            ip=selected_ip,
+            mac=packet.chaddr,
+            secs=packet.secs,
+            xid=packet.xid,
+            **self.server.config.dhcp_opts(),
+        )
         await self.broadcast(response)
 
     async def release_lease(self, packet: DHCPPacket) -> None:
@@ -119,7 +117,6 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
 
         lease = await self.server.get_lease_by_mac(packet.chaddr)
         if lease and lease.ip == packet.ciaddr:
-
             # If lease found, delete it and let `send_response` take care of it
             await self.release_lease(packet)
 
@@ -131,13 +128,14 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
 
         try:
             # Prioritize client's IP address options over ciaddr
-            client_ip_int_or_byte = packet.get_option_value(
-                dhcp.DHCP_OPT_REQ_IP) or packet.ciaddr
+            client_ip_int_or_byte = (
+                packet.get_option_value(dhcp.DHCP_OPT_REQ_IP) or packet.ciaddr
+            )
 
             client_ip = IPv4Address(client_ip_int_or_byte)
 
             if self.is_debug:
-                self.logger.debug(f'requested IP: {client_ip}.')
+                self.logger.debug(f"requested IP: {client_ip}.")
 
             lease = await self.server.get_lease_by_mac(packet.chaddr)
             if lease:
@@ -146,41 +144,46 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
                 # ensure ip is available
                 if await self.server.is_ip_available(client_ip) == False:
                     raise IPv4UnavailableError(
-                        f'IP {client_ip} is already in use by another client')
+                        f"IP {client_ip} is already in use by another client"
+                    )
 
-                lease = Lease(mac=packet.chaddr,
-                              ip=int(client_ip),
-                              lease_time=self.server.config.lease_time)
+                lease = Lease(
+                    mac=packet.chaddr,
+                    ip=int(client_ip),
+                    lease_time=self.server.config.lease_time,
+                )
 
                 await self.server.add_lease(lease)
 
         except IPv4UnavailableError as e:
             if self.is_debug:
-                self.logger.info(f'requested IP is unavailable: {e}')
+                self.logger.info(f"requested IP is unavailable: {e}")
             await self.send_nak(packet)
             return
 
         except ValueError as e:
             if self.is_debug:
-                self.logger.debug(f'Value error: {e}')
+                self.logger.debug(f"Value error: {e}")
             await self.send_nak(packet)
             return
 
         except Exception as e:
-            self.logger.error(f'(ack) DHCP server error {e}')
+            self.logger.error(f"(ack) DHCP server error {e}")
             return
 
-        response = DHCPPacket.Ack(ip=client_ip,
-                                  mac=packet.chaddr,
-                                  secs=packet.secs,
-                                  xid=packet.xid,
-                                  **self.server.config.dhcp_opts())
+        response = DHCPPacket.Ack(
+            ip=client_ip,
+            mac=packet.chaddr,
+            secs=packet.secs,
+            xid=packet.xid,
+            **self.server.config.dhcp_opts(),
+        )
 
         await self.broadcast(response)
 
     def validate_server_id(self, packet: DHCPPacket) -> bool:
-        """ 
-        Validate server id in the packet. 
+        """
+        Validate server id in the packet.
         If server id is present and it is not equal to the server id, return False.
         """
 
@@ -188,7 +191,7 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         if server_id and server_id != self.server.config.server_ip.packed:
             if self.is_debug:
                 self.logger.debug(
-                    f'Server ID missmatch with server IP. Probably it is not for us.'
+                    f"Server ID missmatch with server IP. Probably it is not for us."
                 )
             return False
         return True

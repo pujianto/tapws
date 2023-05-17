@@ -7,17 +7,16 @@ from websockets.legacy.server import WebSocketServerProtocol
 
 
 class Connection:
+    __slots__ = ("_mac", "websocket")
 
-    __slots__ = ('_mac', 'websocket')
-
-    def __init__(self,
-                 websocket: WebSocketServerProtocol,
-                 mac: Optional[str] = None) -> None:
+    def __init__(
+        self, websocket: WebSocketServerProtocol, mac: Optional[str] = None
+    ) -> None:
         self._mac = mac
         self.websocket = websocket
 
     def __repr__(self) -> str:
-        return f'Connection({self.websocket.id})'
+        return f"Connection({self.websocket.id})"
 
     @property
     def mac(self) -> Optional[str]:

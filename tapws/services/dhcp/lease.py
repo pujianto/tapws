@@ -8,15 +8,11 @@ from ...utils import format_mac
 
 
 class Lease:
-
-    __slots__ = ('mac', 'ip', 'lease_time', 'leased_at')
+    __slots__ = ("mac", "ip", "lease_time", "leased_at")
 
     def __init__(
-        self,
-        mac: bytes,
-        ip: int,
-        lease_time: int,
-        leased_at: datetime = datetime.now()) -> None:
+        self, mac: bytes, ip: int, lease_time: int, leased_at: datetime = datetime.now()
+    ) -> None:
         self.mac = mac
         self.ip = ip
         self.leased_at = leased_at
@@ -29,14 +25,14 @@ class Lease:
     def expired(self) -> bool:
         if self.lease_time == -1:
             return False
-        return self.leased_at + timedelta(
-            seconds=self.lease_time) < datetime.now()
+        return self.leased_at + timedelta(seconds=self.lease_time) < datetime.now()
 
-    def renew(self, lease_time: int) -> 'Lease':
+    def renew(self, lease_time: int) -> "Lease":
         self.leased_at = datetime.now()
         self.lease_time = lease_time
         return self
 
     def __repr__(self) -> str:
-
-        return f'Lease({format_mac(self.mac)}, {IPv4Address(self.ip)}, {self.lease_time})'
+        return (
+            f"Lease({format_mac(self.mac)}, {IPv4Address(self.ip)}, {self.lease_time})"
+        )

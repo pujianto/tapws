@@ -28,6 +28,8 @@ class Lease:
         return self.leased_at + timedelta(seconds=self.lease_time) < datetime.now()
 
     def renew(self, lease_time: int) -> "Lease":
+        if lease_time < 1:
+            raise ValueError(f"Lease time must be greater than zero")
         self.leased_at = datetime.now()
         self.lease_time = lease_time
         return self

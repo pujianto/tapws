@@ -5,7 +5,7 @@ from ipaddress import IPv4Address, IPv4Network
 from typing import List
 
 
-class DHCPConfig:
+class DHCPConfig:  # pragma: no cover
     __slots__ = (
         "server_ip",
         "server_router",

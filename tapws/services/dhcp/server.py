@@ -8,6 +8,7 @@ from asyncio.futures import Future
 from functools import partial
 from ipaddress import IPv4Address
 from typing import Any, Generator, Optional
+import typing
 
 from ..base import BaseService
 from .config import DHCPConfig
@@ -29,12 +30,20 @@ class DHCPServer(BaseService):
         "cleanup_task",
         "database",
         "_waiter_",
+        "protocol_cls",
     )
     _waiter_: Future[None]
 
-    def __init__(self, config: DHCPConfig) -> None:
+    def __init__(
+        self,
+        config: DHCPConfig,
+        client_database: Database,
+        *,
+        logger: logging.Logger = logging.getLogger("tapws.dhcp"),
+        protocol_cls: typing.Type[DHCPServerProtocol] = DHCPServerProtocol,
+    ) -> None:
         self.config = config
-        self.database = Database(self.config.lease_time)
+        self.database = client_database
 
         self.loop = asyncio.get_running_loop()
         self.reserved_ips = (
@@ -47,9 +56,9 @@ class DHCPServer(BaseService):
 
         self.cleanup_timer = 60
 
-        logger = logging.getLogger("tapws.dhcp")
         self.is_debug = logger.isEnabledFor(logging.DEBUG)
         self.logger = logger
+        self.protocol_cls = protocol_cls
 
     async def get_available_ip(self) -> IPv4Address:
         for ip in self.config.server_network.hosts():
@@ -95,7 +104,7 @@ class DHCPServer(BaseService):
         self.logger.info("DHCP service restarted")
 
     async def start(self) -> None:
-        factory = partial(DHCPServerProtocol, self)
+        factory = partial(self.protocol_cls, self)
         self.transport, _ = await self.loop.create_datagram_endpoint(
             lambda: factory(), local_addr=("0.0.0.0", 67), allow_broadcast=True
         )
@@ -149,7 +158,7 @@ class DHCPServer(BaseService):
         await self.start()
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb) -> None:
+    async def __aexit__(self, *args) -> None:
         await self.stop()
 
     def __await__(self) -> Generator[Any, None, None]:

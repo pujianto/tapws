@@ -14,9 +14,10 @@ from tapws.config import ServerConfig
 from tapws.services import DHCPConfig
 from tapws.services import DHCPServer
 from tapws.services import Netfilter
+from tapws.services.dhcp.database import Database
 
 
-async def main():
+async def main():  # pragma: no cover
     loop = asyncio.get_running_loop()
     waiter = loop.create_future()
     for sig in (signal.SIGINT, signal.SIGTERM):
@@ -36,7 +37,9 @@ async def main():
             lease_time=server_config.dhcp_lease_time,
             bind_interface=server_config.private_interface,
         )
-        dhcp_service = DHCPServer(dhcp_config)
+
+        client_database = Database(dhcp_config.lease_time)
+        dhcp_service = DHCPServer(dhcp_config, client_database)
         services.append(dhcp_service)
 
     if server_config.public_interface:

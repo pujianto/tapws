@@ -10,10 +10,16 @@ from ..base import BaseService
 class Netfilter(BaseService):
     __slots__ = ("public_interface", "private_interface", "logger", "is_debug")
 
-    def __init__(self, public_interface: str, private_interface: str) -> None:
+    def __init__(
+        self,
+        public_interface: str,
+        private_interface: str,
+        *,
+        logger: logging.Logger = logging.getLogger("tawps.netfilter")
+    ) -> None:
         self.public_interface = public_interface
         self.private_interface = private_interface
-        self.logger = logging.getLogger("tawps.netfilter")
+        self.logger = logger
         self.is_debug = self.logger.isEnabledFor(logging.DEBUG)
 
     def bootstrap_netfilter(self) -> None:

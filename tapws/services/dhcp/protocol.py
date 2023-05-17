@@ -34,7 +34,12 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
         "transport",
     )
 
-    def __init__(self, server: "DHCPServer") -> None:
+    def __init__(
+        self,
+        server: "DHCPServer",
+        *,
+        logger: logging.Logger = logging.getLogger("tapws.dhcp.protocol"),
+    ) -> None:
         self.server = server
         self.response_map = {
             dhcp.DHCPDISCOVER: self.send_offer,
@@ -42,9 +47,9 @@ class DHCPServerProtocol(asyncio.DatagramProtocol):
             dhcp.DHCPRELEASE: self.release_lease,
             dhcp.DHCPDECLINE: self.reinitialize_lease,
         }
+        self.logger = logger
 
         self.allowed_requests = self.response_map.keys()
-        self.logger = logging.getLogger("tapws.dhcp.protocol")
         self.is_debug = self.logger.isEnabledFor(logging.DEBUG)
 
     async def broadcast(self, packet: DHCPPacket) -> None:

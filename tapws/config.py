@@ -50,7 +50,9 @@ class ServerConfig:
                 raise ValueError(
                     "SSL_CERT_PATH and SSL_KEY_PATH must be set if WITH_SSL is set to True"
                 )
-            if not os.path.isfile(fullchain_cert_path) or not os.path.isfile(key_path):
+            if not os.path.isfile(path=fullchain_cert_path) or not os.path.isfile(
+                key_path
+            ):
                 raise ValueError(
                     "SSL_CERT_PATH and SSL_KEY_PATH must be set to valid paths if WITH_SSL is set to True"
                 )

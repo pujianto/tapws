@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 import logging
-from typing import AsyncGenerator, Generator, List, Optional
+from typing import AsyncGenerator, List, Optional
 
 from .lease import Lease
 

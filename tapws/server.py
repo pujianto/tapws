@@ -69,8 +69,7 @@ class Server:
                     "You need to run as root or with sudo to open the TAP interface"
                 )
                 self.logger.error(f"If you are using docker, add --privileged flag")
-            self.logger.error(f"Exiting...")
-            exit(1)
+            raise e
 
         self.tap.addr = str(self.config.intra_ip)
         self.tap.netmask = str(self.config.intra_network.netmask)
@@ -91,6 +90,7 @@ class Server:
 
     def broadcast(self) -> None:
         message = self.tap.read(1024 * 4)
+
         dst_mac = format_mac(message[:6])
         for connection in self._connections:
             try:

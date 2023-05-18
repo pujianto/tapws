@@ -10,8 +10,14 @@ from .lease import Lease
 class Database:
     __slots__ = ("leases", "lease_time", "logger", "is_debug")
 
-    def __init__(self, lease_time: int, *, leases: List[Lease] = []) -> None:
-        self.logger = logging.getLogger("tapws.dhcp.database")
+    def __init__(
+        self,
+        lease_time: int,
+        *,
+        leases: List[Lease] = [],
+        logger: logging.Logger = logging.getLogger("tapws.dhcp.database"),
+    ) -> None:
+        self.logger = logger
         self.is_debug = self.logger.isEnabledFor(logging.DEBUG)
         self.lease_time = lease_time
         self.leases: List[Lease] = leases

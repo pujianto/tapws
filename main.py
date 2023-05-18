@@ -9,7 +9,7 @@ import sys
 
 import uvloop
 
-from tapws import Server
+from tapws.server import Server, TunError
 from tapws.config import ServerConfig
 from tapws.services import DHCPConfig
 from tapws.services import DHCPServer
@@ -49,12 +49,15 @@ async def main():  # pragma: no cover
         )
         services.append(netfilter_service)
 
-    server = Server(server_config, services)
+    try:
+        server = Server(server_config, services)
 
-    async with server:
-        await waiter
-        print("Stopping service")
-    print("Service Stopped")
+        async with server:
+            await waiter
+            print("Stopping service")
+        print("Service Stopped")
+    except TunError as e:
+        exit(1)
 
 
 if __name__ == "__main__":

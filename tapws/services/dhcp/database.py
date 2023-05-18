@@ -36,9 +36,6 @@ class Database:
     def is_ip_available(self, ip: int) -> bool:
         return ip not in [lease.ip for lease in self.leases]
 
-    def get_leases(self) -> List[Lease]:
-        return self.leases
-
     def add_lease(self, lease: Lease) -> None:
         self.leases.append(lease)
 

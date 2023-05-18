@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-#
 
-__version__ = "0.4.2"
+__all__ = ["Server", "ServerConfig"]
 from .server import Server
+from .config import ServerConfig

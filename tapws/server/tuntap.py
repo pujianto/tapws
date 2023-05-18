@@ -3,6 +3,7 @@
 
 import logging
 import typing
+import asyncio
 from pytun import TunTapDevice, IFF_TAP, IFF_NO_PI, Error as TunError
 
 
@@ -44,7 +45,7 @@ class TuntapWrapper(object):
         return self.device.fileno()
 
     async def awrite(self, message: bytes) -> None:
-        self.write(message)
+        await asyncio.get_running_loop().run_in_executor(None, self.write, message)
 
     async def start(self) -> None:
         if not self.is_up:

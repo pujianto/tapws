@@ -35,6 +35,7 @@ class Server:
         "ws_server",
         "_waiter_",
         "services",
+        "ws_cls",
     )
     _waiter_: Future[None]
 
@@ -42,14 +43,16 @@ class Server:
         self,
         config: ServerConfig,
         services: typing.List[BaseService],
-        logger: logging.Logger = logging.getLogger("tapws.main"),
         tuntap_device_cls: typing.Type[TunTapDevice] = TunTapDevice,
+        ws_cls: typing.Type[websockets_serve] = websockets_serve,
+        logger: logging.Logger = logging.getLogger("tapws.main"),
     ) -> None:
         self.config = config
         self._connections: typing.Set[Connection] = set()
         self.is_debug = logger.isEnabledFor(logging.DEBUG)
         self.logger = logger
         self.services = services
+        self.ws_cls = ws_cls
 
         try:
             self.tap = tuntap_device_cls(
@@ -140,7 +143,7 @@ class Server:
         self.logger.info("Starting service...")
 
         self.loop.add_reader(self.tap.fileno(), partial(self.broadcast))
-        self.ws_server = await websockets_serve(
+        self.ws_server = await self.ws_cls(
             self.websocket_handler,
             self.config.host,
             self.config.port,

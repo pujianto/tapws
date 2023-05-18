@@ -6,7 +6,6 @@ import logging
 from asyncio.transports import DatagramTransport
 from functools import partial
 from ipaddress import IPv4Address
-from struct import pack
 from typing import TYPE_CHECKING
 import typing
 

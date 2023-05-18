@@ -41,10 +41,14 @@ class Server(object):
             loop = asyncio.get_running_loop()
         self.loop = loop
 
+    def broadcast(self):
+        message = self.device.read()
+        self.ws.broadcast(message)
+
     async def start(self) -> None:
         self.logger.info("Starting service...")
 
-        self.loop.add_reader(self.device.fileno(), self.ws.broadcast)
+        self.loop.add_reader(self.device.fileno(), self.broadcast)
         await self.device.start()
         await self.ws.start()
         for service in self.services:

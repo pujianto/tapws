@@ -15,7 +15,7 @@ uvloop = "0.16.0"
 websockets = "10.3"
 
 [tool.poetry.dev-dependencies]
-bumpver = "^2022.1116"
+bumpver = "^2022.1120"
 
 [tool.poetry.group.dev.dependencies]
 black = "^23.3.0"

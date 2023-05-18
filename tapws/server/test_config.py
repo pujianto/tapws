@@ -1,3 +1,6 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 from .config import ServerConfig
 import unittest
 import unittest.mock

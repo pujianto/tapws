@@ -1,5 +1,5 @@
 # tapws
-version: 0.4.3
+version: 0.4.4
 
 ## A simple virtual network interface over websocket
 

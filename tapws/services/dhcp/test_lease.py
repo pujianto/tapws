@@ -23,7 +23,7 @@ class TestLease(unittest.TestCase):
         self.assertTrue(self.lease.expired)
 
     def testIsNotExpired(self):
-        self.lease.lease_time = 2
+        self.lease.lease_time = 100
         self.assertFalse(self.lease.expired)
 
     def testLeaseNeverExpired(self):

@@ -4,6 +4,8 @@
 import typing
 import asyncio
 import logging
+from functools import partial
+from ..utils import on_done
 from .config import ServerConfig
 from ..services.base import BaseService
 from .tuntap import TuntapWrapper
@@ -55,6 +57,7 @@ class Server(object):
             await service.start()
 
         self._waiter_ = self.loop.create_future()
+        self._waiter_.add_done_callback(partial(on_done, self.logger))
 
     async def stop(self) -> None:
         self.logger.info("Stopping service...")

@@ -9,6 +9,7 @@ from functools import partial
 from ipaddress import IPv4Address
 from typing import Any, Generator, Optional
 import typing
+from ...utils import on_done
 
 from ..base import BaseService
 from .config import DHCPConfig
@@ -134,6 +135,7 @@ class DHCPServer(BaseService):
             lambda _: self.logger.info("Lease cleaner service stopped")
         )
         self._waiter_ = self.loop.create_future()
+        self._waiter_.add_done_callback(partial(on_done, self.logger))
 
     async def _blocking(self) -> None:
         await self.start()

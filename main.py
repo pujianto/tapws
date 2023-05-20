@@ -12,11 +12,15 @@ import uvloop
 from tapws.server import Server, ServerConfig
 from tapws.services import DHCPConfig, DHCPServer, Netfilter
 from tapws.services.dhcp.database import Database
+from tapws.utils import on_done
+from functools import partial
 
 
 async def main():  # pragma: no cover
     loop = asyncio.get_running_loop()
     waiter = loop.create_future()
+    logger = logging.getLogger("tapws.__main__")
+    waiter.add_done_callback(partial(on_done, logger))
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, waiter.set_result, None)
 

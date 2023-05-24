@@ -9,7 +9,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         env:
           GITHUB_TOKEN: ${{ secrets.pat }}
       - name: Docker meta
@@ -37,7 +37,7 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
 
       - name: Docker Hub Description
-        uses: peter-evans/dockerhub-description@v2
+        uses: peter-evans/dockerhub-description@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_PASSWORD }}

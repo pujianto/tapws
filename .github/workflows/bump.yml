@@ -17,6 +17,7 @@ jobs:
             major
             minor
             patch
+          default_label: patch
     outputs:
       matched_count: ${{ steps.filter_labels.outputs.matched_count }}
       matched_labels: ${{ steps.filter_labels.outputs.matched_labels }}

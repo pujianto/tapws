@@ -5,6 +5,7 @@ import unittest
 import unittest.mock
 from .server import Server, ServerConfig
 import asyncio
+import typing
 
 
 class TestServer(unittest.IsolatedAsyncioTestCase):
@@ -13,14 +14,34 @@ class TestServer(unittest.IsolatedAsyncioTestCase):
         self.tuntap = unittest.mock.AsyncMock()
         self.tuntap_wrapper = unittest.mock.Mock(side_effect=[self.tuntap])
         self.tuntap.fileno = unittest.mock.mock_open()
+        self.tuntap.read = unittest.mock.Mock(return_value=b"mmmmmmmmmm")
 
         self.fake_ws_serve = unittest.mock.AsyncMock()
-        self.fake_ws_serve.close = self.sync_helper
-        self.fake_ws_serve.broadcast = self.sync_helper
+        self.fake_ws_serve.close = lambda: None
+        self.fake_ws_serve.broadcast = self.broadcast_helper
         self.fake_ws_cls = unittest.mock.Mock(side_effect=[self.fake_ws_serve])
 
-    def sync_helper(self):
-        pass
+    def broadcast_helper(self, message: bytes):
+        self.read_message = message
+
+    async def testBroadcast(self):
+        def mock_reader(_: typing.Any, fd: int, callback: typing.Callable, *args):
+            callback()
+
+        with unittest.mock.patch(
+            "asyncio.unix_events._UnixSelectorEventLoop.add_reader",
+            mock_reader,
+        ):
+            s = Server(
+                ServerConfig.From_env(),
+                services=[],
+                tuntap_wrapper=self.tuntap_wrapper,  # type: ignore
+                websocket_wrapper=self.fake_ws_cls,  # type: ignore
+            )
+
+            await s.start()
+            self.assertEqual(self.read_message, b"mmmmmmmmmm")
+            await s.stop()
 
     async def testStartStop(self):
         services = [unittest.mock.AsyncMock()]

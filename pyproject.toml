@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "tapws"
-version = "0.4.4"
+version = "0.4.5"
 description = "A simple virtual network interface over websocket"
 authors = ["Pujianto <hello@pujianto.net>"]
 license = "MIT"
@@ -27,7 +27,7 @@ requires = ["poetry-core>=1.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.bumpver]
-current_version = "v0.4.4"
+current_version = "v0.4.5"
 version_pattern = "vMAJOR.MINOR.PATCH[PYTAGNUM]"
 commit_message = "bump version {old_version} -> {new_version}"
 commit = true
